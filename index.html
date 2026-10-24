@@ -266,7 +266,7 @@ textarea{min-height:70px;resize:vertical}
 .acc summary{list-style:none;cursor:pointer;padding:12px 0;font-weight:800;font-size:15px;display:flex;justify-content:space-between;align-items:center}
 .acc summary::-webkit-details-marker{display:none}
 .acc summary::after{content:'+';font-size:20px;color:var(--text2);font-weight:600}
-.acc[open] summary::after{content:'–'}
+.acc[open] summary::after{content:'−'}
 .acc p{font-size:14px;color:var(--text2);line-height:1.55;padding-bottom:12px}
 .acc p b{color:var(--text)}
 .tog{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;cursor:pointer;padding:6px 0}
@@ -324,6 +324,7 @@ textarea{min-height:70px;resize:vertical}
     <div class="t"><b id="week-count"></b><small id="week-msg"></small></div>
     <button class="ib" onclick="openPlanning()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>Planifier</button>
   </div>
+  <div id="mob-box"></div>
   <div id="next-week-banner"></div>
   <div class="day-title"><h2 id="day-name">Aujourd'hui</h2><span id="day-date"></span></div>
   <div id="day-sessions"></div>
@@ -401,11 +402,13 @@ const TYPES={
   eau:{name:'Session surf',sub:'À l\'eau',color:'var(--c-eau)',kind:'log'}
 };
 const TYPE_ORDER=['haut','bas','corde','mobilite','surf','eau'];
-const QUOTAS={haut:1,bas:1,corde:1,mobilite:2,surf:1};
+const QUOTAS={haut:1,bas:1,corde:1,surf:1};
 const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 const DAYS_LONG=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
-// Semaine type, index 0 = lundi. Corde le mardi (lendemain du haut, loin des jambes), jambes le jeudi, prépa surf le samedi.
-const TEMPLATE=[['haut'],['corde'],['mobilite'],['bas'],[],['surf'],['mobilite']];
+// Semaine type, index 0 = lundi : 4 séances, 3 vrais jours de repos. Corde le mardi (lendemain du haut, loin des jambes),
+// jambes le jeudi, prépa surf le samedi. La mobilité n'a pas de jour : objectif hebdo à caser quand on peut.
+const TEMPLATE=[['haut'],['corde'],[],['bas'],[],['surf'],[]];
+const MOB_GOAL=2;
 const PROGRAM_START='2026-10-26';
 
 // Exercices. levels = paliers successifs ; min/max = fourchette de répétitions (double progression).
@@ -531,6 +534,14 @@ const MOB={
     ['Squat profond tenu',60,'Talons au sol, coudes qui poussent les genoux']]}
 };
 
+// Versions express (8 min) : l'essentiel de chaque routine, pour un soir de tournée
+MOB.A.express=[['Chat-vache',45],['90/90 · droite',45],['90/90 · gauche',45],['Squat profond tenu',45],['Pigeon · droite',45],['Pigeon · gauche',45],['Fléchisseurs de hanche · droite',40],['Fléchisseurs de hanche · gauche',40],['Respiration ventrale',45]];
+MOB.B.express=[['Chat-vache',45],['Fil de l\'aiguille · droite',40],['Fil de l\'aiguille · gauche',40],['Livre ouvert · droite',40],['Livre ouvert · gauche',40],['Cobra · position de rame',40],['Anges au sol',45],['Posture de l\'enfant, bras longs',45],['Pop-ups au ralenti',45]];
+function mobItems(key,len){
+  if(len!=='express')return MOB[key].items;
+  return MOB[key].express.map(([n,sec])=>{const full=MOB[key].items.find(it=>it[0]===n);return [n,sec,full?full[2]:''];});
+}
+
 const TIPS=[
   ['Périménopause','La baisse des œstrogènes accélère la perte de muscle et le stockage au ventre. La musculation 2 à 3 fois par semaine est ce qui l\'inverse le mieux.'],
   ['Ventre & cuisses','On ne peut pas choisir où on perd de la graisse avec des exercices : elle part partout à la fois. Ce qui la fait partir : force, pas quotidiens, protéines et sommeil.'],
@@ -547,12 +558,14 @@ const TIPS=[
 ];
 
 // ================= DATA =================
-function defaults(){return {v:1,start:PROGRAM_START,template:JSON.parse(JSON.stringify(TEMPLATE)),weekPlan:{},sessions:[],presc:JSON.parse(JSON.stringify(PRESC0)),body:[],thyro:[],levo:'',voice:true,draft:null,welcomed:false,name:'',badges:{},mobIdx:0};}
+function defaults(){return {v:2,nutri:{height:null,age:null,pal:1.55},bioView:'tsh',start:PROGRAM_START,template:JSON.parse(JSON.stringify(TEMPLATE)),weekPlan:{},sessions:[],presc:JSON.parse(JSON.stringify(PRESC0)),body:[],thyro:[],levo:'',voice:true,draft:null,welcomed:false,name:'',badges:{},mobIdx:0};}
 function load(){
   let d; try{d=JSON.parse(localStorage.getItem('houle-marie'))}catch(e){}
   const def=defaults(); if(!d)return def;
   for(const k in def) if(d[k]===undefined) d[k]=def[k];
   for(const k in PRESC0) if(!d.presc[k]) d.presc[k]=JSON.parse(JSON.stringify(PRESC0[k]));
+  // v2 : la mobilité sort de la semaine type
+  if((d.v||1)<2){d.template=JSON.parse(JSON.stringify(TEMPLATE));d.v=2;}
   return d;
 }
 function save(){try{localStorage.setItem('houle-marie',JSON.stringify(data))}catch(e){}}
@@ -618,7 +631,7 @@ function ringSVG(done,total,color='var(--accent)'){
 function sessionDetail(type,dateK){
   const w=progWeek(parseK(dateK));
   if(type==='corde'){const rp=ropePlan(w,false);return rp.short;}
-  if(type==='mobilite'){return 'Routine '+MOB[nextMob()].name.toLowerCase()+' · 15 min';}
+  if(type==='mobilite'){return MOB[nextMob()].name+' · express 8 min ou complète 15 min';}
   if(type==='eau')return 'Note tes vagues et tes sensations';
   if(type==='haut')return 'Échauffement corde 8 min · Z, P, T, Q, X, table, W';
   if(type==='bas')return 'Échauffement corde 8 min · squat, bulgare, hip thrust…';
@@ -630,6 +643,22 @@ function doneSummary(s){
   if(s.type==='eau')return (s.dur?s.dur+' min':'')+(s.waves!=null&&s.waves!==''?' · '+s.waves+' vagues':'');
   const n=(s.exercises||[]).length;return n+' exercices'+(s.light?' · version légère':'')+(s.rpe?' · effort '+s.rpe+'/10':'');
 }
+// Séances de la semaine hors mobilité : la mobilité a son propre objectif et ne crée jamais de « retard »
+function weekStats(m){
+  const plan=getPlan(dk(m));let planned=0,done=0,mob=0;
+  weekKeys(m).forEach((k,i)=>{
+    const types=(plan[i]||[]).filter(t=>t!=='mobilite'),ds=sessionsOn(k);
+    planned+=types.length;
+    types.forEach(t=>{if(ds.some(s=>s.type===t))done++});
+    const extra=ds.filter(s=>s.type!=='mobilite'&&!types.includes(s.type)).length;done+=extra;planned+=extra;
+    mob+=ds.filter(s=>s.type==='mobilite').length;
+  });
+  return {planned,done,mob};
+}
+function openMob(len){
+  const inWeek=weekKeys(selDate).includes(dk(new Date()));
+  openSession('mobilite',inWeek?dk(new Date()):dk(selDate),len);
+}
 function renderWeek(){
   const m=monday(selDate),today=dk(new Date()),mk=dk(m),plan=getPlan(mk),w=progWeek(selDate);
   const sun=addDays(m,6);
@@ -637,14 +666,11 @@ function renderWeek(){
   document.getElementById('week-kick').textContent=w<1?'Programme : début le lundi '+fmt(monday(parseK(data.start))):(w>12?'Cycle '+Math.ceil(w/12)+' · ':'')+'Semaine '+ropeWeek(w)+' sur 12 · '+rw.phase;
   const h=new Date().getHours();
   document.getElementById('week-title').textContent=(h<5||h>=18?'Bonsoir':'Bonjour')+nm(' ');
-  document.getElementById('week-sub').innerHTML='<b style="color:var(--text)">'+fmt(m)+' – '+fmt(sun)+'</b>'+(data.weekPlan[mk]?'':'<br>semaine type');
-  let html='',planned=0,doneCount=0;
+  document.getElementById('week-sub').innerHTML='<b style="color:var(--text)">'+fmt(m)+' au '+fmt(sun)+'</b>'+(data.weekPlan[mk]?'':'<br>semaine type');
+  let html='';const st=weekStats(m),planned=st.planned,doneCount=st.done;
   weekKeys(m).forEach((k,i)=>{
     const types=plan[i]||[],done=sessionsOn(k);
     const all=[...types]; done.forEach(s=>{if(!all.includes(s.type))all.push(s.type)});
-    planned+=types.length;
-    types.forEach(t=>{if(done.some(s=>s.type===t))doneCount++});
-    const extra=done.filter(s=>!types.includes(s.type)).length; doneCount+=extra; planned+=extra;
     const bars=all.map(t=>`<div class="bar ${done.some(s=>s.type===t)?'done':''}" style="--c:${TYPES[t].color}"></div>`).join('');
     html+=`<div class="wd ${k===today?'today':''} ${k===dk(selDate)?'sel':''}" onclick="selectDay('${k}')"><div class="dow">${DAYS[i]}</div><div class="dom">${parseK(k).getDate()}</div>${bars?'<div class="dots">'+bars+'</div>':'<div class="rest">repos</div>'}</div>`;
   });
@@ -659,6 +685,8 @@ function renderWeek(){
   if(dow>=4&&!data.weekPlan[nextMk]&&dk(monday(selDate))===dk(monday(new Date()))){
     nb.innerHTML=`<div class="banner info" style="display:flex;align-items:center;gap:10px"><div style="flex:1"><b>Semaine prochaine</b><br>Prépare-la selon le planning de la famille.</div><button class="ib" onclick="changeWeek(1);openPlanning()">Planifier</button></div>`;
   } else nb.innerHTML='';
+  // Mobilité de la semaine
+  document.getElementById('mob-box').innerHTML=`<div class="warm" style="padding:12px 14px"><div class="t"><b>Mobilité · ${st.mob}/${MOB_GOAL}</b><small>${st.mob>=MOB_GOAL?'Objectif atteint. Ton dos te dit merci.':'Quand tu peux, même 8 min le soir.'}</small></div><button class="ib" style="color:var(--c-mob)" onclick="openMob('express')">8 min</button><button class="ib" style="color:var(--c-mob)" onclick="openMob('full')">15 min</button></div>`;
   // Jour
   const sk=dk(selDate),di=(selDate.getDay()+6)%7;
   document.getElementById('day-name').textContent=sk===today?'Aujourd\'hui':DAYS_LONG[di];
@@ -700,14 +728,17 @@ function openPlanning(){
 function renderPlanning(){
   const m=parseK(planMk);
   const counts={};planDraft.flat().forEach(t=>counts[t]=(counts[t]||0)+1);
+  const busy=planDraft.flat().filter(t=>t!=='mobilite').length<=2;
   const q=Object.keys(QUOTAS).map(t=>`<span class="${(counts[t]||0)>=QUOTAS[t]?'ok':''}"><i style="background:${TYPES[t].color}"></i>${TYPES[t].name} ${counts[t]||0}/${QUOTAS[t]}</span>`).join('')+(counts.eau?`<span><i style="background:var(--c-eau)"></i>Surf ${counts.eau}</span>`:'');
   let rows='';
   planDraft.forEach((types,i)=>{
     rows+=`<div class="pd"><div class="n">${DAYS[i]}<small>${addDays(m,i).getDate()}</small></div><div class="tags">${TYPE_ORDER.map(t=>`<button class="tag ${types.includes(t)?'on':''}" style="--c:${TYPES[t].color}" onclick="togglePlan(${i},'${t}')">${t==='eau'?'Surf':TYPES[t].name.replace('Corde à sauter','Corde')}</button>`).join('')}</div></div>`;
   });
-  openSheet(`<h2>Semaine du ${fmt(m)}</h2><p class="note">Pré-remplie avec ta semaine type. Déplace les séances selon le planning de la famille. Essaie de garder un jour entre deux séances de force.</p>
+  openSheet(`<h2>Semaine du ${fmt(m)}</h2><p class="note">Pré-remplie avec ta semaine type : 4 séances et 3 jours de repos. Déplace selon tes tournées et la famille, en gardant si possible un jour entre deux séances de force. La mobilité n'a pas de jour : elle se case quand tu peux.</p>
+  <div class="energy" style="margin:12px 0 4px"><button class="${busy?'':'on'}" onclick="planDraft=JSON.parse(JSON.stringify(data.template));renderPlanning()"><b>4</b>Semaine normale</button><button class="${busy?'on':''}" onclick="planDraft=data.template.map(d=>d.filter(t=>t==='haut'||t==='bas'));renderPlanning()"><b>2</b>Semaine chargée</button></div>
+  ${busy?'<p class="note">Grosse semaine de tournées : on garde les deux séances de force, avec leur échauffement corde. C\'est le minimum qui maintient tous tes progrès, et ça compte comme une semaine complète.</p>':''}
   <div class="quota">${q}</div>${rows}
-  <div class="row mt"><button class="btn btn-s" onclick="planDraft=JSON.parse(JSON.stringify(data.template));renderPlanning()">Semaine type</button><button class="btn btn-p" onclick="savePlanning()">Valider</button></div>
+  <div class="row mt"><button class="btn btn-p" onclick="savePlanning()">Valider</button></div>
   <button class="btn btn-s mt" style="font-size:14px;padding:12px" onclick="saveAsTemplate()">Garder comme semaine type</button>
   <p class="note mt">Tu surfes ce week-end ? Remplace la prépa surf par « Surf » : l'eau compte autant que la prépa.</p>`);
 }
@@ -724,7 +755,7 @@ function addToDay(t,k){
 }
 
 // ================= SÉANCE =================
-function openSession(type,k){
+function openSession(type,k,mobLen){
   if(data.draft&&data.draft.type===type&&data.draft.date===k){cur=data.draft;}
   else{
     if(data.draft&&(data.draft.type!==type||data.draft.date!==k)){
@@ -732,7 +763,7 @@ function openSession(type,k){
       if(hasWork&&!confirm('Une séance '+TYPES[data.draft.type].name+' est en cours. L\'abandonner pour commencer celle-ci ?'))return openSession(data.draft.type,data.draft.date);
     }
     cur={type,date:k,energy:null,light:false,warmDone:false,ex:{},workSec:0,rpe:null,note:'',rec:{},started:Date.now()};
-    if(type==='mobilite')cur.mob=nextMob();
+    if(type==='mobilite'){cur.mob=nextMob();cur.len=mobLen||'full';}
     data.draft=cur;save();
   }
   editing=null;showScreen('session');renderSession();
@@ -811,7 +842,7 @@ function exHTML(id){
   const showHow=cur.how===id;
   return `<div class="ex ${complete?'complete':''}" id="ex-${id}"><div class="top"><div><div class="name">${esc(e.name)}</div><span class="lvl">Palier ${p.level+1}/${e.levels.length} · ${esc(e.levels[p.level])}</span></div><button class="info" onclick="cur.how=cur.how==='${id}'?null:'${id}';renderSession()">?</button></div>
   <div class="target"><b>${n} × ${p.target} ${u}</b>${e.side?' '+e.side:''} · repos ${TYPES[cur.type].rest} s</div>
-  ${last?`<div class="last">Dernière fois : ${last.sets.map(v=>v==null?'–':v).join(' · ')}${last.level!==p.level?' (palier précédent)':''}</div>`:''}
+  ${last?`<div class="last">Dernière fois : ${last.sets.map(v=>v==null?'·':v).join(' · ')}${last.level!==p.level?' (palier précédent)':''}</div>`:''}
   ${showHow?`<div class="how">${esc(e.how)}<br><br><b>Pourquoi :</b> ${esc(e.why)}${e.page?'<br><span style="color:var(--text3)">Livre Lafay, '+e.page+'</span>':''}<br><br><b>Progression :</b> quand toutes les séries atteignent ${e.max} ${u}, tu passes au palier suivant${p.level<e.levels.length-1?' : '+esc(e.levels[p.level+1]):''}.</div>`:''}
   <div class="chips">${chips}</div>${stepper}</div>`;
 }
@@ -919,21 +950,22 @@ function startRope(){const rp=ropePlan(progWeek(parseK(cur.date)),cur.light);sta
 function startWarmup(){startTimer(warmupSegs(progWeek(parseK(cur.date)),cur.light),'var(--c-corde)',sec=>{cur.warmDone=true;cur.workSec=(cur.workSec||0)+sec;persist();renderSession();})}
 
 // ----- MOBILITÉ -----
-function mobSegs(key){
-  const segs=[{kind:'prep',label:'Installe ton tapis',sec:10,cue:''}];
-  MOB[key].items.forEach((it,i)=>{segs.push({kind:'work',label:it[0],sec:it[1],cue:it[2]});if(i<MOB[key].items.length-1)segs.push({kind:'rest',label:'Change de position',sec:8,cue:''});});
+function mobSegs(key,len){
+  const items=mobItems(key,len),segs=[{kind:'prep',label:'Installe ton tapis',sec:10,cue:''}];
+  items.forEach((it,i)=>{segs.push({kind:'work',label:it[0],sec:it[1],cue:it[2]});if(i<items.length-1)segs.push({kind:'rest',label:'Change de position',sec:8,cue:''});});
   return segs;
 }
 function mobHTML(){
-  const R=MOB[cur.mob];const tot=mobSegs(cur.mob).reduce((a,s)=>a+s.sec,0);
-  return `<div class="card"><div class="ct">Routine ${cur.mob} · ${Math.round(tot/60)} min</div>
+  const R=MOB[cur.mob],len=cur.len||'full',items=mobItems(cur.mob,len);const tot=mobSegs(cur.mob,len).reduce((a,s)=>a+s.sec,0);
+  return `<div class="card"><div class="energy" style="margin:0 0 14px">${[['express','Express · 8 min'],['full','Complète · 15 min']].map(([k,l])=>`<button class="${len===k?'on':''}" onclick="cur.len='${k}';persist();renderSession()">${l}</button>`).join('')}</div>
+   <div class="ct">Routine ${cur.mob} · ${Math.round(tot/60)} min</div>
    <div style="font-family:var(--display);font-size:22px;font-weight:700">${esc(R.name)}</div>
-   <div class="plan-list">${R.items.map(it=>`<div><i>${it[1]} s</i><span>${esc(it[0])}</span></div>`).join('')}</div>
+   <div class="plan-list">${items.map(it=>`<div><i>${it[1]} s</i><span>${esc(it[0])}</span></div>`).join('')}</div>
    <button class="btn btn-p mt" style="background:var(--c-mob)" onclick="startMob()">${cur.workSec>0?'Relancer le minuteur':'Lancer le minuteur guidé'}</button>
    <div class="row mt"><button class="btn btn-s" style="font-size:14px;padding:11px" onclick="cur.mob=cur.mob==='A'?'B':'A';persist();renderSession()">Prendre l'autre routine</button></div>
    <p class="note mt">Respire lentement dans chaque position. On cherche une tension douce, jamais une douleur. Les deux routines alternent d'une séance à l'autre.</p></div>`;
 }
-function startMob(){startTimer(mobSegs(cur.mob),'var(--c-mob)',sec=>{cur.workSec=(cur.workSec||0)+sec;persist();renderSession();})}
+function startMob(){startTimer(mobSegs(cur.mob,cur.len||'full'),'var(--c-mob)',sec=>{cur.workSec=(cur.workSec||0)+sec;persist();renderSession();})}
 
 // ----- SURF À L'EAU -----
 function eauHTML(){
@@ -1065,12 +1097,11 @@ function finishSession(){
   celebrate(s,wins);
 }
 function celebrate(s,wins){
-  const m=monday(parseK(s.date)),plan=getPlan(dk(m));
-  let planned=0,done=0;weekKeys(m).forEach((k,i)=>{const ty=plan[i]||[],ds=sessionsOn(k);planned+=ty.length;ty.forEach(t=>{if(ds.some(x=>x.type===t))done++});const ex=ds.filter(x=>!ty.includes(x.type)).length;done+=ex;planned+=ex;});
+  const st=weekStats(monday(parseK(s.date))),planned=st.planned,done=st.done;
   const titles=['Bravo'+nm(' ')+' !','Séance validée !','Encore une de faite !','Tu assures'+nm(', ')+' !'];
   const g=nextGoal();
   openSheet(`<div class="celebr"><div class="big">${s.type==='eau'?'🏄‍♀️':s.type==='corde'?'🔥':s.type==='mobilite'?'🌿':'💪'}</div><h2>${esc(titles[data.sessions.length%titles.length])}</h2>
-  <p class="note">${done>=planned?'Semaine complète : '+done+' séances sur '+planned+'.':'Cette semaine : '+done+' séance'+(done>1?'s':'')+' sur '+planned+'.'} Total depuis le début : ${data.sessions.length}.</p></div>
+  <p class="note">${s.type==='mobilite'?'Mobilité de la semaine : '+st.mob+'/'+MOB_GOAL+'.':done>=planned?'Semaine complète : '+done+' séances sur '+planned+'.':'Cette semaine : '+done+' séance'+(done>1?'s':'')+' sur '+planned+'.'} Total depuis le début : ${data.sessions.length}.</p></div>
   <div class="wins">${wins.map(w=>`<div class="win"><span class="ic">${w[0]}</span><span>${w[1]}</span></div>`).join('')}</div>
   ${g?`<div class="banner"><b>Prochain objectif · S${g.week}</b><br>${esc(g.label)}${g.prog!=null?' · tu en es à '+esc(g.prog):''}</div>`:''}
   <button class="btn btn-p" onclick="closeSheet();showScreen('week')">Continuer</button>`);
@@ -1079,7 +1110,7 @@ function celebrate(s,wins){
 function showDone(id){
   const s=data.sessions.find(x=>x.id===id);if(!s)return;const t=TYPES[s.type];
   let body='';
-  if(s.exercises)body=s.exercises.map(e=>`<div class="win"><span style="flex:1"><b>${esc(EX[e.id].name)}</b><br><span class="note">${esc(EX[e.id].levels[e.level])}</span></span><span style="font-weight:800">${e.sets.map(v=>v==null?'–':v).join(' · ')}</span></div>`).join('');
+  if(s.exercises)body=s.exercises.map(e=>`<div class="win"><span style="flex:1"><b>${esc(EX[e.id].name)}</b><br><span class="note">${esc(EX[e.id].levels[e.level])}</span></span><span style="font-weight:800">${e.sets.map(v=>v==null?'·':v).join(' · ')}</span></div>`).join('');
   if(s.rec&&Object.keys(s.rec).length)body+=`<div class="win">🏆 ${s.rec.cont!=null?s.rec.cont+' s sans arrêt ':''}${s.rec.cross!=null?'· '+s.rec.cross+' croisés ':''}${s.rec.du!=null?'· '+s.rec.du+' doubles':''}</div>`;
   if(s.spot)body+=`<div class="win">📍 ${esc(s.spot)}${s.fun?' · '+'★'.repeat(s.fun):''}</div>`;
   if(s.note)body+=`<div class="win">✎ ${esc(s.note)}</div>`;
@@ -1128,7 +1159,7 @@ function ropeSec(){return data.sessions.reduce((a,s)=>a+((s.type==='corde'||s.ty
 function weeksComplete(){
   // Semaines (passées ou en cours) où tout ce qui était prévu est fait
   const keys=[...new Set(data.sessions.map(s=>dk(monday(parseK(s.date)))))];
-  return keys.filter(mk=>{const plan=getPlan(mk);const m=parseK(mk);return weekKeys(m).every((k,i)=>(plan[i]||[]).every(t=>sessionsOn(k).some(s=>s.type===t)))}).length;
+  return keys.filter(mk=>{const st=weekStats(parseK(mk));return st.planned>0&&st.done>=st.planned}).length;
 }
 const BADGES=[
   {id:'first',ic:'🌱',n:'Première séance',d:'Le plus dur est fait',ok:()=>data.sessions.length>=1},
@@ -1226,11 +1257,11 @@ function lineChart(points,color,unit,dec=1){
 function renderBody(){
   const b=bodySorted(),first=b[0],last=b[b.length-1];
   const delta=(k)=>{const f=b.find(x=>x[k]),l=[...b].reverse().find(x=>x[k]);if(!f||!l||f===l)return '';const d=l[k]-f[k];return `<div class="d" style="color:${d<=0?'var(--ok)':'var(--text2)'}">${d>0?'+':''}${nf(d,1)}</div>`;};
-  const lastV=k=>{const l=[...b].reverse().find(x=>x[k]);return l?nf(l[k],1):'–'};
+  const lastV=k=>{const l=[...b].reverse().find(x=>x[k]);return l?nf(l[k],1):'·'};
   let h=`<div class="hero2"><div class="kick">Depuis ${first?'le '+fmt(parseK(first.date)):'le début'}</div>
    <div style="font-family:var(--display);font-size:21px;font-weight:700;margin-top:4px">${b.length<2?'Tes premières mesures servent de point de départ':(waistDelta()>0?'Ton tour de taille a fondu de '+nf(waistDelta(),1)+' cm':'Continue : le tour de taille bouge avant la balance')}</div>
    <div class="row3"><div class="m"><div class="v">${lastV('waist')}</div><div class="l">Taille (cm)</div>${delta('waist')}</div><div class="m"><div class="v">${lastV('hips')}</div><div class="l">Hanches (cm)</div>${delta('hips')}</div><div class="m"><div class="v">${lastV('thigh')}</div><div class="l">Cuisse (cm)</div>${delta('thigh')}</div></div>
-   <div class="row3" style="grid-template-columns:1fr"><div class="m" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px"><div class="l" style="margin:0">Poids · moyenne des 7 derniers jours</div><div><span class="v" style="font-size:20px">${(()=>{const l=b.filter(x=>x.weight);if(!l.length)return '–';const t=parseK(l[l.length-1].date).getTime();const win=l.filter(x=>parseK(x.date).getTime()>t-7*DAY);return nf(win.reduce((a,x)=>a+x.weight,0)/win.length,1)+' kg'})()}</span></div></div></div></div>`;
+   <div class="row3" style="grid-template-columns:1fr"><div class="m" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px"><div class="l" style="margin:0">Poids · moyenne des 7 derniers jours</div><div><span class="v" style="font-size:20px">${(()=>{const l=b.filter(x=>x.weight);if(!l.length)return '·';const t=parseK(l[l.length-1].date).getTime();const win=l.filter(x=>parseK(x.date).getTime()>t-7*DAY);return nf(win.reduce((a,x)=>a+x.weight,0)/win.length,1)+' kg'})()}</span></div></div></div></div>`;
   const today=dk(new Date());const ex=data.body.find(x=>x.date===today)||{};
   h+=`<div class="card"><div class="ct">Mesure du jour</div>
    <div class="row"><div class="fg"><label class="fl">Poids (kg)</label><input type="number" inputmode="decimal" step="0.1" id="b-weight" value="${ex.weight??''}"></div><div class="fg"><label class="fl">Tour de taille</label><input type="number" inputmode="decimal" step="0.5" id="b-waist" placeholder="au nombril" value="${ex.waist??''}"></div></div>
@@ -1241,23 +1272,15 @@ function renderBody(){
   const wp=b.filter(x=>x.weight).map(x=>({date:x.date,v:x.weight,period:x.period})),wa=b.filter(x=>x.waist).map(x=>({date:x.date,v:x.waist}));
   h+=`<div class="card"><div class="ct">Tour de taille (cm)</div>${lineChart(wa,'var(--c-bas)','cm')}</div>`;
   h+=`<div class="card"><div class="ct">Poids (kg) · ligne = moyenne 7 jours</div>${lineChart(wp,'var(--accent)','kg')}<p class="note">● = règles. Les pics de ces jours-là sont de l'eau, pas de la graisse.</p></div>`;
-  // Thyroïde
-  const th=[...data.thyro].sort((a,c)=>a.date<c.date?1:-1);
-  h+=`<div class="card"><div class="ct">Thyroïde · suivi des bilans</div>
-   <div class="fg"><label class="fl">Traitement actuel</label><input type="text" id="t-levo" placeholder="ex. Levothyrox 50 µg" value="${esc(data.levo)}" onchange="data.levo=this.value;save()"></div>
-   ${th.length?th.map(x=>`<div class="hist"><div class="dt">${shortK(x.date)}<br>${x.date.slice(0,4)}</div><div class="body"><div class="k">TSH ${x.tsh??'–'}${x.t4!=null?' · T4L '+x.t4:''}${x.tpo!=null?' · anti-TPO '+x.tpo:''}</div>${x.note?`<div class="i">${esc(x.note)}</div>`:''}</div><button class="del" onclick="delThyro('${x.date}')">×</button></div>`).join(''):'<p class="note mb">Ajoute tes résultats de prise de sang : en les voyant à côté de ton énergie et de tes progrès, tu comprendras mieux ton corps.</p>'}
-   <div class="row mt"><div class="fg"><label class="fl">Date</label><input type="date" id="th-date" value="${today}"></div><div class="fg"><label class="fl">TSH (mUI/L)</label><input type="number" inputmode="decimal" step="0.01" id="th-tsh"></div></div>
-   <div class="row"><div class="fg"><label class="fl">T4 libre</label><input type="number" inputmode="decimal" step="0.01" id="th-t4"></div><div class="fg"><label class="fl">Anti-TPO</label><input type="number" inputmode="decimal" id="th-tpo"></div></div>
-   <div class="fg"><label class="fl">Note</label><input type="text" id="th-note" placeholder="Changement de dose, fatigue…"></div>
-   <button class="btn btn-s" onclick="addThyro()">Ajouter ce bilan</button>
-   <p class="note mt">Ces valeurs restent sur ton téléphone. L'appli ne fait aucune interprétation médicale : c'est ton médecin ou ton endocrinologue qui ajuste le traitement.</p></div>`;
+  h+=nutriHTML();
+  h+=bioHTML();
   h+=`<div class="card"><div class="ct">Ce que dit la science</div>
-   <details class="acc"><summary>Hashimoto et sport</summary><p>Le sport ne soigne pas la thyroïde, mais il agit sur ce qu'elle dérègle : fatigue, sensibilité à l'insuline, humeur, masse musculaire. Deux règles : <b>la régularité avant l'intensité</b>, et <b>s'adapter à l'énergie du jour</b>. C'est pour ça que l'appli te demande comment tu te sens au début de chaque séance. Un fractionné trop fréquent peut aggraver la fatigue : 2 à 3 séances intenses par semaine maximum, le reste en douceur.</p></details>
-   <details class="acc"><summary>Périménopause : pourquoi le ventre</summary><p>Quand les œstrogènes baissent, la graisse a tendance à se stocker au ventre plutôt qu'aux hanches, et on perd du muscle plus vite. <b>La musculation est le traitement de fond</b> : plus de muscle = plus de sucre consommé, meilleur métabolisme, os plus solides. Le cardio seul ne suffit pas.</p></details>
+   <details class="acc"><summary>Hashimoto et sport</summary><p>Le sport ne soigne pas la thyroïde, mais il agit sur ce qu'elle dérègle : fatigue, sensibilité à l'insuline, humeur, masse musculaire. Deux règles : <b>la régularité avant l'intensité</b>, et <b>s'adapter à l'énergie du jour</b>. C'est pour ça que l'appli te demande comment tu te sens au début de chaque séance. Le fractionné reste à petite dose : 2 à 3 séances intenses par semaine au maximum.</p></details>
+   <details class="acc"><summary>Hashimoto sans traitement</summary><p>Tant que la TSH et la T4 libre restent dans la norme, la thyroïde fait son travail : <b>aucune contre-indication au sport</b>, y compris intense. La maladie évolue lentement, une TSH 1 à 2 fois par an suffit, ou plus tôt si une fatigue inhabituelle s'installe plusieurs semaines malgré le repos. Les compléments à base d'algues (fucus, laminaire) apportent de l'iode : utile en cas de carence, déconseillé en excès dans Hashimoto, à revoir avec l'endocrinologue. Si un traitement est prescrit un jour : à jeun, 30 à 60 min avant le petit-déjeuner, loin du café, du calcium et du fer.</p></details>
+   <details class="acc"><summary>Périménopause : pourquoi le ventre</summary><p>Quand les œstrogènes baissent, la graisse a tendance à se stocker au ventre plutôt qu'aux hanches, et on perd du muscle plus vite. <b>La musculation est le traitement de fond</b> : plus de muscle, c'est plus de sucre consommé, un meilleur métabolisme et des os plus solides. Le cardio seul ne suffit pas.</p></details>
    <details class="acc"><summary>Perdre ventre et cuisses</summary><p>Faire des abdos ne fait pas fondre le ventre, et les fentes ne font pas fondre les cuisses : la graisse part de partout à la fois. Ce qui marche : <b>un léger déficit</b> (pas de régime strict, qui fait fondre le muscle), <b>des protéines à chaque repas</b>, <b>7 000 à 9 000 pas par jour</b>, <b>la force 2 à 3 fois par semaine</b> et <b>7 h de sommeil</b>. Les exercices sculptent ce qu'il y a dessous.</p></details>
-   <details class="acc"><summary>Protéines : combien ?</summary><p>Environ <b>1,6 g par kilo de poids et par jour</b>, réparti sur les repas, 25 à 30 g à chaque fois : 3 œufs, un pot de skyr, 100 g de poulet ou de poisson, 150 g de tofu, ou une assiette de lentilles. Ça protège le muscle pendant la perte de poids et ça cale.</p></details>
-   <details class="acc"><summary>Levothyrox et sport</summary><p>Si tu en prends : à jeun, avec de l'eau, 30 à 60 min avant le petit-déjeuner, et à environ 4 h d'écart du calcium, du fer, du soja et du café. Le sport du matin ne pose pas de problème. Si l'énergie chute pendant plusieurs semaines malgré le repos, parles-en à ton médecin : un bilan peut être utile.</p></details>
-   <details class="acc"><summary>Pourquoi la balance ment</summary><p>Une séance de jambes, un repas salé ou les jours avant les règles peuvent faire <b>+1 à 2 kg d'eau</b>. Et en débutant la musculation, on gagne un peu de muscle pendant qu'on perd du gras. Le <b>tour de taille</b> et les <b>photos</b> disent la vérité plus vite que le poids.</p></details></div>`;
+   <details class="acc"><summary>Fer et sport</summary><p>Les règles, et un peu les impacts de la corde, puisent dans les réserves de fer. Pour les garder : légumineuses ou céréales complètes avec une source de vitamine C dans le même repas (agrumes, poivron, persil), poisson ou viande quelques midis par semaine, et le thé ou le café à distance des repas.</p></details>
+   <details class="acc"><summary>Pourquoi la balance ment</summary><p>Une séance de jambes, un repas salé ou les jours avant les règles peuvent faire <b>+1 à 2 kg d'eau</b>. Après une pause, la reprise remplit aussi les muscles d'eau et de glycogène. Et en débutant la musculation, on gagne un peu de muscle pendant qu'on perd du gras. Le <b>tour de taille</b> dit la vérité plus vite que le poids.</p></details></div>`;
   document.getElementById('body-body').innerHTML=h;
 }
 function saveBody(){
@@ -1268,10 +1291,115 @@ function saveBody(){
   const nb=checkBadges();save();renderBody();
   if(nb.length){openSheet(`<div class="celebr"><div class="big">${nb[0].ic}</div><h2>${esc(nb[0].n)}</h2><p class="note">${esc(nb[0].d)}. Le travail paie${esc(nm(', '))}.</p></div><button class="btn btn-p mt" onclick="closeSheet()">Merci !</button>`);confetti();}
 }
+
+// ----- ALIMENTATION -----
+const PALS=[[1.4,'Peu de pas, 2 à 3 séances'],[1.55,'Tournées, debout et en marche, 3 à 4 séances'],[1.7,'Très active : beaucoup de marche, surf en plus']];
+function lastWeightAvg(){
+  const l=bodySorted().filter(x=>x.weight);if(!l.length)return null;
+  const t=parseK(l[l.length-1].date).getTime();const win=l.filter(x=>parseK(x.date).getTime()>t-7*DAY);
+  return win.reduce((a,x)=>a+x.weight,0)/win.length;
+}
+// Pente du poids (kg/semaine) par régression sur les 4 dernières semaines, si au moins 3 pesées sur 14 jours
+function weightTrend(){
+  const l=bodySorted().filter(x=>x.weight);if(l.length<3)return null;
+  const t1=parseK(l[l.length-1].date).getTime(),pts=l.filter(x=>parseK(x.date).getTime()>t1-28*DAY);
+  if(pts.length<3)return null;const xs=pts.map(x=>parseK(x.date).getTime()/DAY),ys=pts.map(x=>x.weight);
+  if(xs[xs.length-1]-xs[0]<14)return null;
+  const mx=xs.reduce((a,b)=>a+b)/xs.length,my=ys.reduce((a,b)=>a+b)/ys.length;
+  let num=0,den=0;xs.forEach((x,i)=>{num+=(x-mx)*(ys[i]-my);den+=(x-mx)**2});
+  return den?num/den*7:null;
+}
+function nutriCalc(){
+  const n=data.nutri,w=lastWeightAvg();
+  if(!n.height||!n.age||!w)return null;
+  const bmr=10*w+6.25*n.height-5*n.age-161;            // Mifflin-St Jeor, femme
+  const maint=bmr*n.pal;
+  const target=Math.max(bmr*1.1,maint-Math.min(300,maint*.15));
+  const r50=x=>Math.round(x/50)*50;
+  return {w,bmr:r50(bmr),maint:r50(maint),target:r50(target),prot:Math.round(w*1.6/5)*5};
+}
+function nutriHTML(){
+  const n=data.nutri,c=nutriCalc(),tr=weightTrend();
+  let trend='';
+  if(tr!=null){
+    const t=nf(tr,1).replace('-','−');
+    trend=tr<-.8?`<b>${t} kg par semaine</b> : c'est un peu rapide, tu risques de perdre du muscle. Ajoute 100 à 150 kcal par jour.`
+      :tr<=-.2?`<b>${t} kg par semaine</b> : le rythme idéal. Ne change rien.`
+      :tr<=.2?`<b>Poids stable</b> sur 4 semaines. Regarde le tour de taille : s'il baisse, tu perds du gras en gagnant du muscle, parfait. S'il stagne aussi, retire 100 à 150 kcal par jour.`
+      :`<b>+${nf(tr,1)} kg par semaine.</b> Souvent de l'eau (cycle, reprise des jambes). Juge sur 3 à 4 semaines avant de changer quoi que ce soit.`;
+  }
+  return `<div class="card"><div class="ct">Alimentation · ton budget du jour</div>
+   <div class="row"><div class="fg"><label class="fl">Taille (cm)</label><input type="number" inputmode="numeric" value="${n.height??''}" onchange="data.nutri.height=+this.value||null;save();renderBody()"></div><div class="fg"><label class="fl">Âge</label><input type="number" inputmode="numeric" value="${n.age??''}" onchange="data.nutri.age=+this.value||null;save();renderBody()"></div></div>
+   <div class="fg"><label class="fl">Ton activité</label><select onchange="data.nutri.pal=+this.value;save();renderBody()">${PALS.map(([v,l])=>`<option value="${v}" ${n.pal===v?'selected':''}>${l}</option>`).join('')}</select></div>
+   ${c?`<div class="hero2" style="box-shadow:none;background:var(--bg);padding:12px;margin:0"><div class="row3" style="margin:0">
+     <div class="m" style="background:var(--surf)"><div class="v">${nf(c.maint)}</div><div class="l">kcal pour<br>rester stable</div></div>
+     <div class="m" style="background:var(--surf)"><div class="v" style="color:var(--accent)">${nf(c.target)}</div><div class="l">kcal pour<br>perdre doucement</div></div>
+     <div class="m" style="background:var(--surf)"><div class="v">${c.prot} g</div><div class="l">protéines<br>par jour</div></div></div></div>
+   <p class="note mt">Calcul pour ${nf(c.w,1)} kg (moyenne de tes dernières pesées) : métabolisme de repos de ${nf(c.bmr)} kcal (formule de Mifflin-St Jeor) multiplié par ton activité, moins un petit déficit de 300 kcal au maximum. C'est une estimation à 10 % près : ta tendance des semaines suivantes donne la vraie réponse.</p>
+   ${trend?`<div class="banner ok" style="margin:10px 0 0">${trend}</div>`:`<p class="note mt">Avec 3 pesées sur au moins 2 semaines, l'appli te dira si le rythme est bon.</p>`}`
+   :`<p class="note">Entre ta taille, ton âge et une pesée (plus haut) pour calculer ton budget.</p>`}
+   <details class="acc" style="margin-top:6px"><summary>Comment s'en servir sans tout peser</summary><p>
+   <b>Pas de régime strict.</b> Avec Hashimoto et la reprise de la force, un gros déficit fatigue, coûte du muscle et ralentit la dépense. 300 kcal de moins par jour, c'est une tartine beurrée et un verre de vin : ça ne se sent presque pas, et ça fait environ 1,5 kg de gras en un mois.<br><br>
+   <b>Calibrer l'œil :</b> une à deux semaines avec une appli de comptage, puis on lâche. Ensuite l'assiette suffit : la moitié en légumes, une paume de protéines, un poing de féculents, un filet d'huile.<br><br>
+   <b>Les protéines d'abord</b> : 25 à 30 g par repas (3 œufs, un skyr, 100 g de poisson ou de poulet, 150 g de tofu, une grosse assiette de lentilles). Elles protègent le muscle et calent.<br><br>
+   <b>Autour des séances</b> : garde les féculents au repas d'avant ou d'après. Ils servent à la séance, pas au ventre.<br><br>
+   <b>Les tournées</b> : prévois une collation protéinée dans la voiture (skyr, amandes, œuf dur) pour éviter d'arriver affamée au dîner.<br><br>
+   <b>L'alcool</b> : un verre, c'est 100 à 150 kcal, et il abîme le sommeil, qui règle la faim du lendemain.</p></details></div>`;
+}
+
+// ----- BILANS -----
+// norm : norme de labo par défaut ; chaque bilan peut porter sa propre norme (les réactifs changent)
+const BIO=[
+  {k:'tsh',n:'TSH',u:'mUI/L',norm:[0.55,4.78],dec:2},
+  {k:'t4',n:'T4 libre',u:'pmol/L',norm:[11.5,22.7],dec:1},
+  {k:'t3',n:'T3 libre',u:'pmol/L',norm:[3.5,6.5],dec:1},
+  {k:'fer',n:'Ferritine',u:'µg/L',norm:null,dec:0},
+  {k:'vitd',n:'Vitamine D',u:'ng/mL',norm:[30,60],dec:1},
+  {k:'tpo',n:'Anti-TPO',u:'UI/mL',norm:null,dec:0,noChart:true}
+];
+const bioNorm=(x,b)=>(x.norms&&x.norms[b.k])||b.norm;
+function bioChart(b){
+  const pts=[...data.thyro].filter(x=>x[b.k]!=null).sort((a,c)=>a.date<c.date?-1:1);
+  if(pts.length<2)return `<p class="note">${pts.length?'Une seule valeur pour l\'instant.':'Aucune valeur.'}</p>`;
+  const W=320,H=140,P=30,norm=bioNorm(pts[pts.length-1],b);
+  const xs=pts.map(p=>parseK(p.date).getTime()),ys=pts.map(p=>p[b.k]);
+  let y0=Math.min(...ys),y1=Math.max(...ys);if(norm){y0=Math.min(y0,norm[0]);y1=Math.max(y1,norm[1]);}
+  const pad=(y1-y0)*.12||1;y0-=pad;y1+=pad;
+  const x0=xs[0],x1=xs[xs.length-1];
+  const X=x=>P+(x-x0)/(x1-x0||1)*(W-P-12),Y=y=>8+(y1-y)/(y1-y0)*(H-32);
+  const band=norm?`<rect x="${P}" y="${Y(norm[1]).toFixed(1)}" width="${W-P-12}" height="${(Y(norm[0])-Y(norm[1])).toFixed(1)}" fill="var(--ok)" opacity=".12" rx="4"/><text x="2" y="${(Y(norm[1])+4).toFixed(1)}" font-size="10" fill="var(--text3)">${nf(norm[1],b.dec>1?2:1)}</text><text x="2" y="${(Y(norm[0])+4).toFixed(1)}" font-size="10" fill="var(--text3)">${nf(norm[0],b.dec>1?2:1)}</text>`:'';
+  const path=pts.map((p,i)=>(i?'L':'M')+X(xs[i]).toFixed(1)+','+Y(p[b.k]).toFixed(1)).join('');
+  const dots=pts.map((p,i)=>{const n=bioNorm(p,b),out=n&&(p[b.k]<n[0]||p[b.k]>n[1]);return `<circle cx="${X(xs[i]).toFixed(1)}" cy="${Y(p[b.k]).toFixed(1)}" r="${out?4.5:3.5}" fill="${out?'var(--warn)':'var(--c-surf)'}"/>`}).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">${band}<path d="${path}" fill="none" stroke="var(--c-surf)" stroke-width="2" stroke-linejoin="round"/>${dots}
+  <text x="${P}" y="${H-8}" font-size="10" fill="var(--text3)">${shortK(pts[0].date)}/${pts[0].date.slice(2,4)}</text><text x="${W-12}" y="${H-8}" font-size="10" fill="var(--text3)" text-anchor="end">${shortK(pts[pts.length-1].date)}/${pts[pts.length-1].date.slice(2,4)}</text></svg>
+  <p class="note">${norm?'Bande verte = '+(b.k==='vitd'?'zone visée':'norme du laboratoire')+'. ':''}Dernière valeur : <b>${nf(pts[pts.length-1][b.k],b.dec)} ${b.u}</b> le ${shortK(pts[pts.length-1].date)}/${pts[pts.length-1].date.slice(0,4)}. C'est la tendance qui compte, pas une valeur isolée.</p>`;
+}
+function bioHTML(){
+  const th=[...data.thyro].sort((a,c)=>a.date<c.date?1:-1);
+  const view=BIO.find(b=>b.k===data.bioView&&!b.noChart)||BIO[0];
+  const fmtV=(x,b)=>{if(x[b.k]==null)return '';let v=b.n+' '+nf(x[b.k],b.dec);const n=bioNorm(x,b);if(b.k==='tpo'&&n)v+=' (norme < '+nf(n[1],1)+')';return v;};
+  return `<div class="card"><div class="ct">Thyroïde & bilans sanguins</div>
+   <div class="quota" style="margin-top:0">${BIO.filter(b=>!b.noChart).map(b=>`<span style="cursor:pointer;${b===view?'background:var(--text);color:var(--bg)':''}" onclick="data.bioView='${b.k}';save();renderBody()">${b.n}</span>`).join('')}</div>
+   ${bioChart(view)}
+   <div class="fg mt"><label class="fl">Traitement et compléments</label><input type="text" placeholder="ex. pas de traitement thyroïdien ; sélénium, vitamine D…" value="${esc(data.levo)}" onchange="data.levo=this.value;save()"></div>
+   ${th.length?th.map(x=>`<div class="hist"><div class="dt">${shortK(x.date)}<br>${x.date.slice(0,4)}</div><div class="body"><div class="k" style="font-weight:700;font-size:13px">${BIO.map(b=>fmtV(x,b)).filter(Boolean).join(' · ')}</div>${x.note?`<div class="i">${esc(x.note)}</div>`:''}</div><button class="del" onclick="delThyro('${x.date}')">×</button></div>`).join(''):'<p class="note mb">Ajoute tes résultats de prise de sang, ou importe le fichier de tes bilans depuis Réglages.</p>'}
+   <details class="acc" style="margin-top:6px"><summary>Ajouter un bilan</summary><div style="padding-bottom:12px">
+   <div class="row"><div class="fg"><label class="fl">Date</label><input type="date" id="th-date" value="${dk(new Date())}"></div><div class="fg"><label class="fl">TSH (mUI/L)</label><input type="number" inputmode="decimal" step="0.01" id="th-tsh"></div></div>
+   <div class="row"><div class="fg"><label class="fl">T4 libre (pmol/L)</label><input type="number" inputmode="decimal" step="0.01" id="th-t4"></div><div class="fg"><label class="fl">T3 libre (pmol/L)</label><input type="number" inputmode="decimal" step="0.01" id="th-t3"></div></div>
+   <div class="row"><div class="fg"><label class="fl">Ferritine (µg/L)</label><input type="number" inputmode="decimal" id="th-fer"></div><div class="fg"><label class="fl">Vitamine D (ng/mL)</label><input type="number" inputmode="decimal" step="0.1" id="th-vitd"></div></div>
+   <div class="row"><div class="fg"><label class="fl">Anti-TPO (UI/mL)</label><input type="number" inputmode="decimal" step="0.1" id="th-tpo"></div><div class="fg"><label class="fl">Norme anti-TPO (&lt;)</label><input type="number" inputmode="decimal" step="0.1" id="th-tponorm" placeholder="ex. 13,8"></div></div>
+   <div class="fg"><label class="fl">Note</label><input type="text" id="th-note" placeholder="Compléments en cours, fatigue, heure du prélèvement…"></div>
+   <button class="btn btn-s" onclick="addThyro()">Ajouter ce bilan</button></div></details>
+   <p class="note mt">Ces valeurs restent sur ton téléphone. L'appli n'interprète rien médicalement : elle t'aide à voir les tendances et à préparer tes rendez-vous.</p></div>`;
+}
 function addThyro(){
   const v=id=>{const x=document.getElementById(id).value;return x===''?null:parseFloat(String(x).replace(',','.'))};
-  const e={date:document.getElementById('th-date').value||dk(new Date()),tsh:v('th-tsh'),t4:v('th-t4'),tpo:v('th-tpo'),note:document.getElementById('th-note').value};
-  if(e.tsh==null&&e.t4==null&&e.tpo==null){alert('Entre au moins une valeur.');return;}
+  const e={date:document.getElementById('th-date').value||dk(new Date()),note:document.getElementById('th-note').value};
+  ['tsh','t4','t3','fer','vitd','tpo'].forEach(k=>e[k]=v('th-'+k));
+  const tn=v('th-tponorm');if(tn!=null)e.norms={tpo:[0,tn]};
+  if(['tsh','t4','t3','fer','vitd','tpo'].every(k=>e[k]==null)){alert('Entre au moins une valeur.');return;}
+  const old=data.thyro.find(x=>x.date===e.date);
+  if(old){['tsh','t4','t3','fer','vitd','tpo'].forEach(k=>{if(e[k]==null)e[k]=old[k]??null});if(!e.note)e.note=old.note;if(!e.norms)e.norms=old.norms;}
   data.thyro=data.thyro.filter(x=>x.date!==e.date);data.thyro.push(e);save();renderBody();
 }
 function delThyro(d){if(!confirm('Supprimer ce bilan ?'))return;data.thyro=data.thyro.filter(x=>x.date!==d);save();renderBody();}
@@ -1291,7 +1419,7 @@ function renderSettings(){
    <label class="tog"><input type="checkbox" ${data.voice?'checked':''} onchange="data.voice=this.checked;save()"> Annonces vocales pendant les minuteurs</label>
    <button class="btn btn-s mt" onclick="data.template=JSON.parse(JSON.stringify(TEMPLATE));save();alert('Semaine type d\\'origine restaurée.')">Restaurer la semaine type d'origine</button></div>
   <div class="card"><div class="ct">Tes exercices · séries, reps, palier</div><p class="note">L'appli ajuste toute seule : +1 rep quand toutes les séries sont réussies, palier suivant en haut de la fourchette. Touche un exercice pour corriger à la main.</p>${rows}</div>
-  <div class="card"><div class="ct">Sauvegarde</div><p class="note mb">Tes données sont sur ce téléphone uniquement. Exporte-les de temps en temps (et avant de changer de téléphone).</p>
+  <div class="card"><div class="ct">Sauvegarde</div><p class="note mb">Tes données sont sur ce téléphone uniquement. Exporte-les de temps en temps (et avant de changer de téléphone). « Importer » accepte aussi un fichier de bilans sanguins : il s'ajoute sans rien effacer.</p>
    <div class="row"><button class="btn btn-s" onclick="exportData()">Exporter</button><button class="btn btn-s" onclick="document.getElementById('imp').click()">Importer</button></div>
    <input type="file" id="imp" accept=".json,application/json" class="hidden" onchange="importData(this)">
    <button class="btn btn-d mt" onclick="resetData()">Tout effacer</button></div>
@@ -1310,7 +1438,13 @@ function exportData(){
 }
 function importData(inp){
   const f=inp.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.sessions||!d.presc)throw 0;if(!confirm('Remplacer les données actuelles par cette sauvegarde ?'))return;localStorage.setItem('houle-marie',JSON.stringify(d));data=load();alert('Sauvegarde importée.');showScreen('week');}catch(e){alert('Fichier non reconnu.');}};
+  r.onload=()=>{try{const d=JSON.parse(r.result);
+    if(d.kind==='houle-bilans'){
+      const dates=new Set(d.thyro.map(x=>x.date));data.thyro=data.thyro.filter(x=>!dates.has(x.date)).concat(d.thyro);
+      if(d.levo&&!data.levo)data.levo=d.levo;if(d.nutri)Object.keys(d.nutri).forEach(k=>{if(data.nutri[k]==null)data.nutri[k]=d.nutri[k]});
+      save();alert(d.thyro.length+' bilans importés.');showScreen('body');return;
+    }
+    if(!d.sessions||!d.presc)throw 0;if(!confirm('Remplacer les données actuelles par cette sauvegarde ?'))return;localStorage.setItem('houle-marie',JSON.stringify(d));data=load();alert('Sauvegarde importée.');showScreen('week');}catch(e){alert('Fichier non reconnu.');}};
   r.readAsText(f);
 }
 function resetData(){if(!confirm('Effacer toutes les séances, mesures et progrès ?'))return;if(!confirm('Vraiment tout ? Pense à exporter avant.'))return;localStorage.removeItem('houle-marie');data=load();showScreen('week');}
@@ -1328,7 +1462,7 @@ function confetti(){
 function welcome(){
   openSheet(`<div class="celebr"><div class="big">🌊</div><h2>Salut !</h2><div class="fg" style="margin:12px 0 4px;text-align:left"><label class="fl">Ton prénom</label><input type="text" id="w-name" autocomplete="given-name" value="${esc(data.name)}"></div><p class="note">Voici Houle, ton programme sur 12 semaines pour le surf, la corde à sauter, la souplesse et la force.</p></div>
   <div class="wins">
-   <div class="win"><span class="ic">📅</span><span><b>Ta semaine est pré-remplie</b> : 2 séances de force, 1 de corde, 1 de prépa surf, 2 de mobilité. Déplace-les selon le planning de la famille.</span></div>
+   <div class="win"><span class="ic">📅</span><span><b>Ta semaine est pré-remplie</b> : 2 séances de force, 1 de corde, 1 de prépa surf, et 3 vrais jours de repos. La mobilité se case quand tu peux. Grosse semaine de tournées ? Le mode « semaine chargée » garde l'essentiel.</span></div>
    <div class="win"><span class="ic">💚</span><span><b>Chaque séance commence par « comment tu te sens ? »</b> Les jours sans, l'appli allège tout seule. Avec Hashimoto, c'est la clé.</span></div>
    <div class="win"><span class="ic">↑</span><span><b>Tu touches les cases au fil des séries.</b> Quand tout est réussi, l'objectif monte d'une rep la fois suivante, puis tu passes au palier suivant.</span></div>
    <div class="win"><span class="ic">⏱</span><span><b>Corde et mobilité sont guidées</b> par un minuteur qui parle. Pas besoin de coach payant !</span></div>

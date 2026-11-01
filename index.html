@@ -183,6 +183,24 @@ textarea{min-height:70px;resize:vertical}
 .recs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .recs label{font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px}
 
+/* SCHÉMAS */
+.fig{width:100%;height:auto;display:block}
+.fig .fb,.fig .ff{fill:none;stroke:var(--text);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.fig .ff{opacity:.32}.fig .fh{fill:var(--text)}
+.fig .fp{fill:var(--bg2);stroke:var(--text3);stroke-width:2}.fig .fpb{fill:var(--text3)}.fig .fg{stroke:var(--line);stroke-width:2}
+.fig .fdb{fill:var(--accent)}
+.fig-view{font-size:10.5px;font-weight:700;color:var(--text3);text-align:center;margin-top:2px;letter-spacing:.04em}
+.ex-fig{background:var(--bg);border-radius:12px;margin-top:10px;padding:4px 6px 6px;max-width:190px}
+.mobrow{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+.mobrow:last-child{border-bottom:none}
+.mobrow .mf{flex:0 0 128px;background:var(--bg);border-radius:10px;padding:2px 3px 4px}
+.mobrow .mt2{flex:1;min-width:0;font-size:13px;color:var(--text2);line-height:1.45}
+.mobrow .mt2 b{display:block;color:var(--text);font-size:14.5px;margin-bottom:2px}
+.mobrow .mt2 i{font-style:normal;font-weight:800;color:var(--c-mob);font-size:12px}
+.timer .t-fig{width:min(78vw,340px);margin-bottom:4px;min-height:20px}
+.timer .t-fig .fig{background:rgba(255,255,255,.55);border-radius:18px;padding:4px}
+.timer.work .t-fig .fig{background:rgba(255,255,255,.92)}
+.timer .t-fig .fig-view{color:inherit;opacity:.7}
 /* REST BAR */
 .restbar{position:fixed;left:12px;right:12px;bottom:calc(var(--safe-bottom) + 76px);z-index:120;background:var(--text);color:var(--bg);border-radius:16px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:536px;margin:0 auto}
 .restbar .lab{flex:1;font-size:13px;font-weight:700;opacity:.8}
@@ -375,6 +393,7 @@ textarea{min-height:70px;resize:vertical}
   <div class="tbar"><i id="t-prog" style="width:0"></i></div>
   <div class="tt"><span id="t-round"></span><span style="display:flex;gap:6px"><button id="t-mute" onclick="toggleVoice()">Voix</button><button onclick="timerStop()">Terminer</button></span></div>
   <div class="main">
+    <div class="t-fig" id="t-fig"></div>
     <div class="phase" id="t-phase"></div>
     <div class="lbl" id="t-label"></div>
     <div class="big" id="t-big">0</div>
@@ -391,6 +410,7 @@ textarea{min-height:70px;resize:vertical}
 <div class="ov" id="sheet" onclick="if(event.target===this)closeSheet()"><div class="sheet" id="sheet-body"></div></div>
 <canvas id="confetti"></canvas>
 
+<script src="figures.js"></script>
 <script>
 // ================= CONFIG =================
 const TYPES={
@@ -533,6 +553,28 @@ const MOB={
     ['Pop-ups au ralenti',60,'Cinq pop-ups lents, en contrôlant chaque position'],
     ['Squat profond tenu',60,'Talons au sol, coudes qui poussent les genoux']]}
 };
+
+// Description complète de chaque position (le libellé sans « · droite / gauche ») et schéma associé
+const MOB_HOW={
+  'Chat-vache':['catcow','À quatre pattes, mains sous les épaules, genoux sous les hanches. En expirant, arrondis le dos vers le plafond et rentre le menton (le chat). En inspirant, creuse doucement le dos et regarde devant toi (la vache). Lentement, au rythme du souffle.'],
+  'Fente basse + rotation':['wgs','Grande fente, genou arrière posé au sol. Pose la main du côté de la jambe avant au sol, à l\'intérieur du pied. Ouvre l\'autre bras vers le plafond en tournant la poitrine, suis ta main du regard, puis redescends. Alterne doucement.'],
+  '90/90':['n9090','Assise au sol. La jambe avant est pliée à 90° devant toi, le tibia en travers. La jambe arrière est pliée à 90° sur le côté, le pied vers l\'arrière. Dos droit, penche le buste vers le genou avant en gardant les fesses au sol : tu sens l\'étirement dans la fesse avant.'],
+  'Squat profond tenu':['deepsq','Pieds un peu plus larges que les hanches, pointes ouvertes. Descends le plus bas possible, talons au sol (une serviette roulée sous les talons si besoin). Paumes jointes, pousse les genoux vers l\'extérieur avec les coudes. Dos long, respire.'],
+  'Pigeon':['pigeon','Depuis quatre pattes, avance un genou entre tes mains, le pied vers l\'autre poignet, tibia en travers. Allonge l\'autre jambe loin derrière, dessus du pied au sol. Bassin bien droit, puis descends le buste vers l\'avant sur les avant-bras. L\'étirement est dans la fesse de la jambe pliée.'],
+  'Fléchisseurs de hanche':['hipflex','Dos au canapé, pose un genou au sol tout contre, le tibia remonté le long de l\'assise. L\'autre pied à plat devant toi, genou à 90°. Serre la fesse de la jambe arrière et avance le bassin, buste droit. L\'étirement est sur le devant de la cuisse et de la hanche. Plus doux : genou au sol, sans le canapé.'],
+  'Ischios':['ischio','Debout face à une chaise, pose un talon dessus, jambe tendue, pointe du pied vers le plafond. Mains sur les hanches, dos bien plat, penche le buste vers l\'avant en basculant depuis les hanches, sans arrondir le dos. Arrête-toi dès que l\'arrière de la cuisse tire. La jambe d\'appui reste un peu fléchie.'],
+  'Respiration ventrale':['breath','Allongée sur le dos, genoux pliés, une main sur le ventre, l\'autre sur la poitrine. Inspire par le nez en gonflant le ventre (la main de la poitrine bouge peu), puis expire longuement par la bouche en laissant le ventre redescendre. L\'expiration dure plus longtemps que l\'inspiration.'],
+  'Fil de l\'aiguille':['thread','À quatre pattes. Glisse un bras sous ta poitrine vers le côté opposé, paume vers le ciel, jusqu\'à poser l\'épaule et la tempe au sol. L\'autre main reste au sol. Reviens en ouvrant ce bras vers le plafond.'],
+  'Livre ouvert':['book','Couchée sur le côté, genoux pliés à 90° devant toi, bras tendus devant, paumes l\'une contre l\'autre. Genoux collés au sol, ouvre le bras du dessus en arc de cercle jusqu\'à l\'autre côté en suivant ta main du regard. Le haut du dos tourne, pas le bassin. Reviens et recommence.'],
+  'Cobra':['cobra','À plat ventre, mains sous les épaules, coudes près du corps. Pousse doucement pour décoller la poitrine, le bassin reste au sol, épaules basses loin des oreilles, regard loin devant comme sur ta planche. Si le bas du dos tire, reste sur les avant-bras (le sphinx).'],
+  'Chien tête en bas':['dog','Depuis quatre pattes, décolle les genoux et pousse les fesses vers le haut et l\'arrière. Mains bien ouvertes qui poussent le sol, dos long, tête entre les bras. Genoux un peu fléchis si l\'arrière des cuisses tire ; pédale doucement en descendant un talon puis l\'autre.'],
+  'Anges au sol':['angels','Allongée sur le dos, genoux pliés, bas du dos au sol. Bras ouverts en W, dos des mains et coudes au sol. Fais glisser les bras vers le haut en Y sans perdre le contact avec le sol, puis reviens en W. Lentement : c\'est la mobilité d\'épaules de la rame.'],
+  'Pectoraux au mur':['pecwall','À côté d\'un mur, avant-bras posé à plat dessus, coude à hauteur d\'épaule. Avance d\'un pas et tourne doucement le buste du côté opposé, jusqu\'à sentir l\'étirement dans la poitrine et l\'avant de l\'épaule.'],
+  'Posture de l\'enfant, bras longs':['child','À genoux, gros orteils qui se touchent, genoux écartés. Assieds-toi sur les talons, puis allonge le buste vers l\'avant, bras loin devant, front au sol. Respire dans le dos.'],
+  'Pop-ups au ralenti':['pop','À plat ventre, mains sous la poitrine. Pousse et ramène lentement les pieds sous toi : pied arrière en travers, pied avant entre les mains, genoux fléchis, bras ouverts, regard devant. Reviens à plat ventre et recommence, cinq fois, en contrôlant chaque position.']
+};
+const mobBase=label=>label.startsWith('Cobra')?'Cobra':label.split(' · ')[0];
+const mobInfo=label=>MOB_HOW[mobBase(label)]||[null,''];
 
 // Versions express (8 min) : l'essentiel de chaque routine, pour un soir de tournée
 MOB.A.express=[['Chat-vache',45],['90/90 · droite',45],['90/90 · gauche',45],['Squat profond tenu',45],['Pigeon · droite',45],['Pigeon · gauche',45],['Fléchisseurs de hanche · droite',40],['Fléchisseurs de hanche · gauche',40],['Respiration ventrale',45]];
@@ -794,6 +836,7 @@ function renderSession(){
   <button class="btn btn-p" onclick="finishSession()">Terminer la séance</button>
   <button class="btn btn-d mt" onclick="abandonSession()">Abandonner</button>`;
   document.getElementById('session-body').innerHTML=h;
+  figStart();
 }
 
 // ----- FORCE -----
@@ -840,7 +883,8 @@ function exHTML(id){
     stepper=`<div class="stepper"><span>Série ${editing.i+1}</span><button onclick="adjSet(-1)">−</button><b>${v}</b><button onclick="adjSet(1)">+</button><button class="ok" onclick="editing=null;renderSession()">OK</button></div>`;
   }
   const showHow=cur.how===id;
-  return `<div class="ex ${complete?'complete':''}" id="ex-${id}"><div class="top"><div><div class="name">${esc(e.name)}</div><span class="lvl">Palier ${p.level+1}/${e.levels.length} · ${esc(e.levels[p.level])}</span></div><button class="info" onclick="cur.how=cur.how==='${id}'?null:'${id}';renderSession()">?</button></div>
+  return `<div class="ex ${complete?'complete':''}" id="ex-${id}"><div class="top"><div><div class="name">${esc(e.name)}</div><span class="lvl">Palier ${p.level+1}/${e.levels.length} · ${esc(e.levels[p.level])}</span></div><button class="info" aria-label="Comment faire" onclick="cur.how=cur.how==='${id}'?null:'${id}';renderSession()">?</button></div>
+  ${FIGS[id]?`<div class="ex-fig">${figSVG(id)}</div>`:''}
   <div class="target"><b>${n} × ${p.target} ${u}</b>${e.side?' '+e.side:''} · repos ${TYPES[cur.type].rest} s</div>
   ${last?`<div class="last">Dernière fois : ${last.sets.map(v=>v==null?'·':v).join(' · ')}${last.level!==p.level?' (palier précédent)':''}</div>`:''}
   ${showHow?`<div class="how">${esc(e.how)}<br><br><b>Pourquoi :</b> ${esc(e.why)}${e.page?'<br><span style="color:var(--text3)">Livre Lafay, '+e.page+'</span>':''}<br><br><b>Progression :</b> quand toutes les séries atteignent ${e.max} ${u}, tu passes au palier suivant${p.level<e.levels.length-1?' : '+esc(e.levels[p.level+1]):''}.</div>`:''}
@@ -952,7 +996,7 @@ function startWarmup(){startTimer(warmupSegs(progWeek(parseK(cur.date)),cur.ligh
 // ----- MOBILITÉ -----
 function mobSegs(key,len){
   const items=mobItems(key,len),segs=[{kind:'prep',label:'Installe ton tapis',sec:10,cue:''}];
-  items.forEach((it,i)=>{segs.push({kind:'work',label:it[0],sec:it[1],cue:it[2]});if(i<items.length-1)segs.push({kind:'rest',label:'Change de position',sec:8,cue:''});});
+  items.forEach((it,i)=>{segs.push({kind:'work',label:it[0],sec:it[1],cue:it[2],fig:mobInfo(it[0])[0]});if(i<items.length-1)segs.push({kind:'rest',label:'Change de position',sec:8,cue:''});});
   return segs;
 }
 function mobHTML(){
@@ -960,7 +1004,10 @@ function mobHTML(){
   return `<div class="card"><div class="energy" style="margin:0 0 14px">${[['express','Express · 8 min'],['full','Complète · 15 min']].map(([k,l])=>`<button class="${len===k?'on':''}" onclick="cur.len='${k}';persist();renderSession()">${l}</button>`).join('')}</div>
    <div class="ct">Routine ${cur.mob} · ${Math.round(tot/60)} min</div>
    <div style="font-family:var(--display);font-size:22px;font-weight:700">${esc(R.name)}</div>
-   <div class="plan-list">${items.map(it=>`<div><i>${it[1]} s</i><span>${esc(it[0])}</span></div>`).join('')}</div>
+   <p class="note" style="margin-top:4px">Regarde les positions avant de lancer : le minuteur les montre aussi en grand.</p>
+   <div style="margin-top:6px">${items.map((it,i)=>{const [fg,how]=mobInfo(it[0]);
+     if(i&&mobBase(items[i-1][0])===mobBase(it[0]))return `<div class="mobrow" style="padding-top:0;margin-top:-4px"><div class="mt2" style="padding-left:140px"><i>${it[1]} s</i> · ${esc(it[0].split(' · ').pop())} : la même chose de l'autre côté</div></div>`;
+     return `<div class="mobrow">${fg?`<div class="mf">${figSVG(fg)}</div>`:''}<div class="mt2"><b>${esc(it[0])}</b><i>${it[1]} s</i> · ${esc(how||it[2])}</div></div>`}).join('')}</div>
    <button class="btn btn-p mt" style="background:var(--c-mob)" onclick="startMob()">${cur.workSec>0?'Relancer le minuteur':'Lancer le minuteur guidé'}</button>
    <div class="row mt"><button class="btn btn-s" style="font-size:14px;padding:11px" onclick="cur.mob=cur.mob==='A'?'B':'A';persist();renderSession()">Prendre l'autre routine</button></div>
    <p class="note mt">Respire lentement dans chaque position. On cherche une tension douce, jamais une douleur. Les deux routines alternent d'une séance à l'autre.</p></div>`;
@@ -990,6 +1037,9 @@ function startTimer(segs,color,onEnd){
 }
 function announce(){
   const s=T.segs[T.i];
+  // Pendant la transition, on montre déjà la position suivante
+  const fs=s.fig?s:(T.segs[T.i+1]&&T.segs[T.i+1].fig&&s.kind!=='work'?T.segs[T.i+1]:null);
+  document.getElementById('t-fig').innerHTML=fs?figSVG(fs.fig):'';figStart();
   if(s.kind==='work'){say(s.label+', '+(s.sec>=60?(s.sec%60?Math.floor(s.sec/60)+' minute '+s.sec%60:s.sec/60+' minute'+(s.sec>=120?'s':'')):s.sec+' secondes'));beep(1046,.3,.3);}
   else if(s.kind==='rest'){say(s.label==='Repos'?'Repos':s.label);beep(523,.25,.25);}
   else say(s.label);

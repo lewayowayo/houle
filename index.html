@@ -22,7 +22,7 @@
   --bg:#F5EFE6;--bg2:#EDE5D8;--surf:#FFFDF9;--surf2:#F4EDE2;--line:#E4DACB;
   --text:#1D2A2F;--text2:#5B686D;--text3:#97A1A4;
   --accent:#E2583E;--accent-ink:#fff;
-  --c-haut:#E2583E;--c-bas:#16857F;--c-corde:#E39A26;--c-mob:#8466D0;--c-surf:#2B74BE;--c-eau:#1BA3B8;
+  --c-haut:#E2583E;--c-bas:#16857F;--c-corde:#E39A26;--c-mob:#8466D0;--c-surf:#2B74BE;--c-eau:#1BA3B8;--c-yoga:#5E8F4E;
   --ok:#2C9A68;--warn:#E39A26;--bad:#D2463A;
   --shadow:0 1px 2px rgba(40,30,10,.05),0 4px 14px rgba(40,30,10,.05);
   --r:18px;--r-s:12px;
@@ -33,13 +33,13 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0F1A1E;--bg2:#14232A;--surf:#192A31;--surf2:#21353D;--line:#2B424B;
   --text:#EEF2EF;--text2:#A6B5B8;--text3:#6D8087;
-  --accent:#F06A4F;--c-haut:#F06A4F;--c-bas:#2BB0A8;--c-corde:#F2AC3D;--c-mob:#A28BE8;--c-surf:#5A9CE0;--c-eau:#3CC3D6;
+  --accent:#F06A4F;--c-haut:#F06A4F;--c-bas:#2BB0A8;--c-corde:#F2AC3D;--c-mob:#A28BE8;--c-surf:#5A9CE0;--c-eau:#3CC3D6;--c-yoga:#8DBF7A;
   --ok:#45B984;--bad:#EE6457;--shadow:none;
 }}
 :root[data-theme="dark"]{
   --bg:#0F1A1E;--bg2:#14232A;--surf:#192A31;--surf2:#21353D;--line:#2B424B;
   --text:#EEF2EF;--text2:#A6B5B8;--text3:#6D8087;
-  --accent:#F06A4F;--c-haut:#F06A4F;--c-bas:#2BB0A8;--c-corde:#F2AC3D;--c-mob:#A28BE8;--c-surf:#5A9CE0;--c-eau:#3CC3D6;
+  --accent:#F06A4F;--c-haut:#F06A4F;--c-bas:#2BB0A8;--c-corde:#F2AC3D;--c-mob:#A28BE8;--c-surf:#5A9CE0;--c-eau:#3CC3D6;--c-yoga:#8DBF7A;
   --ok:#45B984;--bad:#EE6457;--shadow:none;
 }
 html,body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:16px;line-height:1.45;overscroll-behavior:none;min-height:100dvh}
@@ -421,9 +421,12 @@ const TYPES={
   corde:{name:'Corde à sauter',sub:'Fractionné',color:'var(--c-corde)',kind:'rope'},
   mobilite:{name:'Mobilité',sub:'Hanches · dos · épaules',color:'var(--c-mob)',kind:'mob'},
   surf:{name:'Prépa surf',sub:'Rame · pop-up · gainage',color:'var(--c-surf)',kind:'strength',rest:45},
-  eau:{name:'Session surf',sub:'À l\'eau',color:'var(--c-eau)',kind:'log'}
+  eau:{name:'Session surf',sub:'À l\'eau',color:'var(--c-eau)',kind:'log'},
+  yoga:{name:'Yoga',sub:'Cours ou vidéo',color:'var(--c-yoga)',kind:'yoga'}
 };
-const TYPE_ORDER=['haut','bas','corde','mobilite','surf','eau'];
+const TYPE_ORDER=['haut','bas','corde','mobilite','yoga','surf','eau'];
+// Mobilité et yoga : objectif hebdo commun, jamais de « retard » sur la semaine.
+const SOFT=['mobilite','yoga'];
 const QUOTAS={haut:1,bas:1,corde:1,surf:1};
 const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 const DAYS_LONG=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
@@ -677,6 +680,7 @@ function sessionDetail(type,dateK){
   if(type==='corde'){const rp=ropePlan(w,false);return rp.short;}
   if(type==='mobilite'){return MOB[nextMob()].name+' · express 8 min ou complète 15 min';}
   if(type==='eau')return 'Note tes vagues et tes sensations';
+  if(type==='yoga')return 'Note la durée et le style · compte pour la mobilité';
   if(type==='haut')return 'Échauffement corde 8 min · Z, P, T, Q, X, table, W';
   if(type==='bas')return 'Échauffement corde 8 min · squat, bulgare, hip thrust…';
   if(type==='surf')return 'Pop-ups, rame, gainage, équilibre · 35 min';
@@ -684,6 +688,7 @@ function sessionDetail(type,dateK){
 }
 function doneSummary(s){
   if(s.type==='corde'||s.type==='mobilite')return Math.round((s.workSec||0)/60)+' min'+(s.light?' · version légère':'')+(s.rpe?' · effort '+s.rpe+'/10':'');
+  if(s.type==='yoga')return [s.dur?s.dur+' min':'',s.style||'',s.rpe?'effort '+s.rpe+'/10':''].filter(Boolean).join(' · ');
   if(s.type==='eau')return (s.dur?s.dur+' min':'')+(s.waves!=null&&s.waves!==''?' · '+s.waves+' vagues':'');
   const n=(s.exercises||[]).length;return n+' exercices'+(s.light?' · version légère':'')+(s.rpe?' · effort '+s.rpe+'/10':'');
 }
@@ -691,11 +696,11 @@ function doneSummary(s){
 function weekStats(m){
   const plan=getPlan(dk(m));let planned=0,done=0,mob=0;
   weekKeys(m).forEach((k,i)=>{
-    const types=(plan[i]||[]).filter(t=>t!=='mobilite'),ds=sessionsOn(k);
+    const types=(plan[i]||[]).filter(t=>!SOFT.includes(t)),ds=sessionsOn(k);
     planned+=types.length;
     types.forEach(t=>{if(ds.some(s=>s.type===t))done++});
-    const extra=ds.filter(s=>s.type!=='mobilite'&&!types.includes(s.type)).length;done+=extra;planned+=extra;
-    mob+=ds.filter(s=>s.type==='mobilite').length;
+    const extra=ds.filter(s=>!SOFT.includes(s.type)&&!types.includes(s.type)).length;done+=extra;planned+=extra;
+    mob+=ds.filter(s=>SOFT.includes(s.type)).length;
   });
   return {planned,done,mob};
 }
@@ -730,7 +735,7 @@ function renderWeek(){
     nb.innerHTML=`<div class="banner info" style="display:flex;align-items:center;gap:10px"><div style="flex:1"><b>Semaine prochaine</b><br>Prépare-la selon le planning de la famille.</div><button class="ib" onclick="changeWeek(1);openPlanning()">Planifier</button></div>`;
   } else nb.innerHTML='';
   // Mobilité de la semaine
-  document.getElementById('mob-box').innerHTML=`<div class="warm" style="padding:12px 14px"><div class="t"><b>Mobilité · ${st.mob}/${MOB_GOAL}</b><small>${st.mob>=MOB_GOAL?'Objectif atteint. Ton dos te dit merci.':'Quand tu peux, même 8 min le soir.'}</small></div><button class="ib" style="color:var(--c-mob)" onclick="openMob('express')">8 min</button><button class="ib" style="color:var(--c-mob)" onclick="openMob('full')">15 min</button></div>`;
+  document.getElementById('mob-box').innerHTML=`<div class="warm" style="padding:12px 14px"><div class="t"><b>Mobilité ou yoga · ${st.mob}/${MOB_GOAL}</b><small>${st.mob>=MOB_GOAL?'Objectif atteint. Ton dos te dit merci.':'Quand tu peux, même 8 min le soir.'}</small></div><button class="ib" style="color:var(--c-mob)" onclick="openMob('express')">8 min</button><button class="ib" style="color:var(--c-mob)" onclick="openMob('full')">15 min</button></div>`;
   // Jour
   const sk=dk(selDate),di=(selDate.getDay()+6)%7;
   document.getElementById('day-name').textContent=sk===today?'Aujourd\'hui':DAYS_LONG[di];
@@ -772,11 +777,11 @@ function openPlanning(){
 function renderPlanning(){
   const m=parseK(planMk);
   const counts={};planDraft.flat().forEach(t=>counts[t]=(counts[t]||0)+1);
-  const busy=planDraft.flat().filter(t=>t!=='mobilite').length<=2;
+  const busy=planDraft.flat().filter(t=>!SOFT.includes(t)).length<=2;
   const q=Object.keys(QUOTAS).map(t=>`<span class="${(counts[t]||0)>=QUOTAS[t]?'ok':''}"><i style="background:${TYPES[t].color}"></i>${TYPES[t].name} ${counts[t]||0}/${QUOTAS[t]}</span>`).join('')+(counts.eau?`<span><i style="background:var(--c-eau)"></i>Surf ${counts.eau}</span>`:'');
   let rows='';
   planDraft.forEach((types,i)=>{
-    rows+=`<div class="pd"><div class="n">${DAYS[i]}<small>${addDays(m,i).getDate()}</small></div><div class="tags">${TYPE_ORDER.map(t=>`<button class="tag ${types.includes(t)?'on':''}" style="--c:${TYPES[t].color}" onclick="togglePlan(${i},'${t}')">${t==='eau'?'Surf':TYPES[t].name.replace('Corde à sauter','Corde')}</button>`).join('')}</div></div>`;
+    rows+=`<div class="pd"><div class="n">${DAYS[i]}<small>${addDays(m,i).getDate()}</small></div><div class="tags">${TYPE_ORDER.map(t=>`<button class="tag ${types.includes(t)?'on':''}" style="--c:${TYPES[t].color}" onclick="togglePlan(${i},'${t}')">${t==='eau'?'Surf':TYPES[t].name.replace('Corde à sauter','Corde')}</button>`).join('')}<button class="tag ${types.length?'':'on'}" style="--c:var(--text3)" onclick="planDraft[${i}]=[];renderPlanning()">Repos</button></div></div>`;
   });
   openSheet(`<h2>Semaine du ${fmt(m)}</h2><p class="note">Pré-remplie avec ta semaine type : 4 séances et 3 jours de repos. Déplace selon tes tournées et la famille, en gardant si possible un jour entre deux séances de force. La mobilité n'a pas de jour : elle se case quand tu peux.</p>
   <div class="energy" style="margin:12px 0 4px"><button class="${busy?'':'on'}" onclick="planDraft=JSON.parse(JSON.stringify(data.template));renderPlanning()"><b>4</b>Semaine normale</button><button class="${busy?'on':''}" onclick="planDraft=data.template.map(d=>d.filter(t=>t==='haut'||t==='bas'));renderPlanning()"><b>2</b>Semaine chargée</button></div>
@@ -828,10 +833,11 @@ function renderSession(){
   const t=TYPES[cur.type],w=progWeek(parseK(cur.date)),rw=ropeWeek(w);
   let h=`<div class="shead" style="--c:${t.color};background:${t.color}"><div class="kick">${esc(t.sub)} · S${rw}</div><h1>${esc(t.name)}</h1><p>${esc(fmtLong(parseK(cur.date)))}</p></div>`;
   if(cur.type==='eau'){h+=eauHTML();document.getElementById('session-body').innerHTML=h;return;}
-  h+=energyHTML();
+  if(t.kind!=='yoga')h+=energyHTML();
   if(t.kind==='strength')h+=strengthHTML();
   if(t.kind==='rope')h+=ropeHTML();
   if(t.kind==='mob')h+=mobHTML();
+  if(t.kind==='yoga')h+=yogaHTML();
   h+=`<div class="warm ${cur.vacDone?'done':''}"><div class="t"><b>Fin de séance · ventre · 5 min</b><small>${cur.vacDone?'Fait. Le transverse a bossé.':'Stomach vacuum : 20 s rentré, 15 s pour respirer, 9 fois.'}</small></div><button class="play" onclick="startVacuum()" aria-label="Lancer le minuteur ventre"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button></div>`;
   h+=`<div class="card"><div class="ct">Difficulté ressentie</div><div class="rpe">${[...Array(10)].map((_,i)=>`<button class="${cur.rpe===i+1?'on':''}" onclick="cur.rpe=${i+1};persist();renderSession()">${i+1}</button>`).join('')}</div>
   <p class="note" style="margin-top:6px">1 = balade, 10 = impossible de faire plus. Une bonne séance se situe entre 6 et 8.</p>
@@ -1054,6 +1060,11 @@ function eauHTML(){
   <button class="btn btn-p" style="background:var(--c-eau)" onclick="eauSync();finishSession()">Enregistrer la session</button>
   <button class="btn btn-d mt" onclick="abandonSession()">Annuler</button>`;
 }
+function yogaHTML(){
+  return `<div class="card"><div class="row"><div class="fg"><label class="fl">Durée (min)</label><input type="number" inputmode="numeric" value="${cur.dur??''}" oninput="cur.dur=this.value===''?null:+this.value;persist()"></div>
+  <div class="fg"><label class="fl">Style</label><input type="text" placeholder="ex. vinyasa, yin, vidéo" value="${esc(cur.style||'')}" oninput="cur.style=this.value;persist()"></div></div>
+  <p class="note" style="margin:0">Compte dans ton objectif mobilité de la semaine.</p></div>`;
+}
 function eauSync(){const g=id=>document.getElementById(id);if(!g('eau-dur'))return;cur.dur=g('eau-dur').value===''?null:+g('eau-dur').value;cur.waves=g('eau-waves').value===''?null:+g('eau-waves').value;cur.spot=g('eau-spot').value;cur.note=g('eau-note').value;persist();}
 
 // ================= MINUTEUR =================
@@ -1165,6 +1176,7 @@ function finishSession(){
     wins.unshift(['⏱',Math.round(s.workSec/60)+' min de saut, environ '+nf(Math.round(s.workSec*2))+' sauts']);
   }
   if(t.kind==='mob'){s.mob=cur.mob;data.mobIdx++;wins.unshift(['🧘','Routine '+esc(MOB[cur.mob].name.toLowerCase())+' · '+Math.round((s.workSec||0)/60)+' min']);}
+  if(t.kind==='yoga'){s.dur=cur.dur;s.style=cur.style||'';s.workSec=(cur.dur||0)*60;wins.unshift(['🧘','Yoga'+(cur.dur?' · '+cur.dur+' min':'')+(cur.style?' · '+esc(cur.style):'')]);}
   if(t.kind==='log'){s.dur=cur.dur;s.waves=cur.waves;s.spot=cur.spot;s.fun=cur.fun;if(cur.waves)wins.push(['🌊',cur.waves+' vagues prises. Total : '+(data.sessions.reduce((a,x)=>a+(+x.waves||0),0)+cur.waves)]);}
   if(cur.light)wins.push(['💚','Version légère : tu as gardé le rythme sans puiser dans tes réserves. C\'est exactement ce qu\'il fallait.']);
   data.sessions.push(s);
@@ -1181,8 +1193,8 @@ function celebrate(s,wins){
   const st=weekStats(monday(parseK(s.date))),planned=st.planned,done=st.done;
   const titles=['Bravo'+nm(' ')+' !','Séance validée !','Encore une de faite !','Tu assures'+nm(', ')+' !'];
   const g=nextGoal();
-  openSheet(`<div class="celebr"><div class="big">${s.type==='eau'?'🏄‍♀️':s.type==='corde'?'🔥':s.type==='mobilite'?'🌿':'💪'}</div><h2>${esc(titles[data.sessions.length%titles.length])}</h2>
-  <p class="note">${s.type==='mobilite'?'Mobilité de la semaine : '+st.mob+'/'+MOB_GOAL+'.':done>=planned?'Semaine complète : '+done+' séances sur '+planned+'.':'Cette semaine : '+done+' séance'+(done>1?'s':'')+' sur '+planned+'.'} Total depuis le début : ${data.sessions.length}.</p></div>
+  openSheet(`<div class="celebr"><div class="big">${s.type==='eau'?'🏄‍♀️':s.type==='corde'?'🔥':s.type==='mobilite'?'🌿':s.type==='yoga'?'🧘':'💪'}</div><h2>${esc(titles[data.sessions.length%titles.length])}</h2>
+  <p class="note">${SOFT.includes(s.type)?'Mobilité de la semaine : '+st.mob+'/'+MOB_GOAL+'.':done>=planned?'Semaine complète : '+done+' séances sur '+planned+'.':'Cette semaine : '+done+' séance'+(done>1?'s':'')+' sur '+planned+'.'} Total depuis le début : ${data.sessions.length}.</p></div>
   <div class="wins">${wins.map(w=>`<div class="win"><span class="ic">${w[0]}</span><span>${w[1]}</span></div>`).join('')}</div>
   ${g?`<div class="banner"><b>Prochain objectif · S${g.week}</b><br>${esc(g.label)}${g.prog!=null?' · tu en es à '+esc(g.prog):''}</div>`:''}
   <button class="btn btn-p" onclick="closeSheet();showScreen('week')">Continuer</button>`);

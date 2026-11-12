@@ -162,6 +162,8 @@ textarea{min-height:70px;resize:vertical}
 .ex .how{font-size:13.5px;color:var(--text2);line-height:1.5;margin-top:10px;padding:10px 12px;background:var(--bg);border-radius:10px}
 .ex .how b{color:var(--text)}
 .chips{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+.side-row{margin-top:10px}.side-row .chips{margin-top:4px}
+.side-l{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
 .chip{min-width:50px;flex:1;max-width:72px;height:50px;border-radius:14px;border:2px dashed var(--line);background:transparent;font-size:19px;font-weight:800;cursor:pointer;color:var(--text3);font-variant-numeric:tabular-nums;position:relative}
 .chip small{font-size:11px;font-weight:700}
 .chip.done{border:2px solid var(--ok);background:var(--ok);color:#fff}
@@ -384,7 +386,7 @@ textarea{min-height:70px;resize:vertical}
 
 <div class="restbar hidden" id="restbar">
   <div class="lab" id="rest-lab">Repos</div>
-  <div class="tm" id="rest-tm">1:15</div>
+  <div class="tm" id="rest-tm">1:00</div>
   <button onclick="restAdd(15)">+15 s</button>
   <button onclick="restStop()">Passer</button>
 </div>
@@ -414,8 +416,8 @@ textarea{min-height:70px;resize:vertical}
 <script>
 // ================= CONFIG =================
 const TYPES={
-  haut:{name:'Force haut',sub:'Bras · poitrine · dos',color:'var(--c-haut)',kind:'strength',rest:75},
-  bas:{name:'Force bas',sub:'Jambes · fessiers',color:'var(--c-bas)',kind:'strength',rest:90},
+  haut:{name:'Force haut',sub:'Bras · poitrine · dos',color:'var(--c-haut)',kind:'strength',rest:60},
+  bas:{name:'Force bas',sub:'Jambes · fessiers',color:'var(--c-bas)',kind:'strength',rest:60},
   corde:{name:'Corde à sauter',sub:'Fractionné',color:'var(--c-corde)',kind:'rope'},
   mobilite:{name:'Mobilité',sub:'Hanches · dos · épaules',color:'var(--c-mob)',kind:'mob'},
   surf:{name:'Prépa surf',sub:'Rame · pop-up · gainage',color:'var(--c-surf)',kind:'strength',rest:45},
@@ -830,6 +832,7 @@ function renderSession(){
   if(t.kind==='strength')h+=strengthHTML();
   if(t.kind==='rope')h+=ropeHTML();
   if(t.kind==='mob')h+=mobHTML();
+  h+=`<div class="warm ${cur.vacDone?'done':''}"><div class="t"><b>Fin de séance · ventre · 5 min</b><small>${cur.vacDone?'Fait. Le transverse a bossé.':'Stomach vacuum : 20 s rentré, 15 s pour respirer, 9 fois.'}</small></div><button class="play" onclick="startVacuum()" aria-label="Lancer le minuteur ventre"><svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></button></div>`;
   h+=`<div class="card"><div class="ct">Difficulté ressentie</div><div class="rpe">${[...Array(10)].map((_,i)=>`<button class="${cur.rpe===i+1?'on':''}" onclick="cur.rpe=${i+1};persist();renderSession()">${i+1}</button>`).join('')}</div>
   <p class="note" style="margin-top:6px">1 = balade, 10 = impossible de faire plus. Une bonne séance se situe entre 6 et 8.</p>
   <div class="fg mt" style="margin-bottom:0"><label class="fl">Note (facultatif)</label><textarea placeholder="Sensations, douleurs, victoires…" oninput="cur.note=this.value;persist()">${esc(cur.note)}</textarea></div></div>
@@ -845,6 +848,14 @@ function lastLog(id){
   for(const x of s){const e=(x.exercises||[]).find(e=>e.id===id);if(e)return e;}
   return null;
 }
+// Exercices faits côté par côté : toutes les séries d'un côté, puis l'autre. Une rangée de cases par côté.
+const UNI=new Set(['bu','step','pat','row1','spl','bal']);
+const SWITCH_REST=15;
+function sideNames(id){const s=EX[id].side;return s==='/bras'?['Bras droit','Bras gauche']:s==='/côté'?['Côté droit','Côté gauche']:['Jambe droite','Jambe gauche']}
+function slots(id){return setsFor(id)*(UNI.has(id)?2:1)}
+// Log : une valeur par série = le côté le plus faible, pour que progression, records et badges restent inchangés.
+function mergeSides(arr,n){const sets=[];for(let i=0;i<n;i++){const a=arr[i],b=arr[n+i];sets.push(a==null?(b??null):b==null?a:Math.min(a,b));}return sets}
+function setsTxt(x){const j=v=>v.map(v=>v==null?'·':v).join(' · ');return x.sides?'D '+j(x.sides[0])+'  G '+j(x.sides[1]):j(x.sets)}
 function setsFor(id){const p=data.presc[id];return cur.light?Math.max(2,p.sets-1):p.sets}
 function strengthHTML(){
   let h='';
@@ -870,34 +881,41 @@ function exHTML(id){
   const e=EX[id],p=data.presc[id],n=setsFor(id),arr=cur.ex[id]||[];
   const last=lastLog(id);
   const u=unitLbl(id);
+  const uni=UNI.has(id),N=slots(id),sn=sideNames(id);
+  const chip=i=>{const v=arr[i],cls=v==null?'':(v>=p.target?'done':'short');
+    return `<button class="chip ${cls} ${editing&&editing.id===id&&editing.i===i?'edit':''}" onclick="tapSet('${id}',${i})">${v==null?p.target:v}${u==='s'?'<small>s</small>':''}</button>`;};
   let chips='';
-  for(let i=0;i<n;i++){
-    const v=arr[i];
-    const cls=v==null?'':(v>=p.target?'done':'short');
-    chips+=`<button class="chip ${cls} ${editing&&editing.id===id&&editing.i===i?'edit':''}" onclick="tapSet('${id}',${i})">${v==null?p.target:v}${u==='s'?'<small>s</small>':''}</button>`;
-  }
-  const complete=arr.filter(v=>v!=null).length>=n;
+  if(uni)[0,1].forEach(k=>{let r='';for(let i=0;i<n;i++)r+=chip(k*n+i);chips+=`<div class="side-row"><span class="side-l">${sn[k]}</span><div class="chips">${r}</div></div>`;});
+  else{for(let i=0;i<n;i++)chips+=chip(i);chips=`<div class="chips">${chips}</div>`;}
+  const complete=arr.filter(v=>v!=null).length>=N;
   let stepper='';
   if(editing&&editing.id===id){
     const v=arr[editing.i];
-    stepper=`<div class="stepper"><span>Série ${editing.i+1}</span><button onclick="adjSet(-1)">−</button><b>${v}</b><button onclick="adjSet(1)">+</button><button class="ok" onclick="editing=null;renderSession()">OK</button></div>`;
+    const lab=uni?sn[Math.floor(editing.i/n)]+' · série '+(editing.i%n+1):'Série '+(editing.i+1);
+    stepper=`<div class="stepper"><span>${lab}</span><button onclick="adjSet(-1)">−</button><b>${v}</b><button onclick="adjSet(1)">+</button><button class="ok" onclick="editing=null;renderSession()">OK</button></div>`;
   }
   const showHow=cur.how===id;
   return `<div class="ex ${complete?'complete':''}" id="ex-${id}"><div class="top"><div><div class="name">${esc(e.name)}</div><span class="lvl">Palier ${p.level+1}/${e.levels.length} · ${esc(e.levels[p.level])}</span></div><button class="info" aria-label="Comment faire" onclick="cur.how=cur.how==='${id}'?null:'${id}';renderSession()">?</button></div>
   ${FIGS[id]?`<div class="ex-fig">${figSVG(id)}</div>`:''}
   <div class="target"><b>${n} × ${p.target} ${u}</b>${e.side?' '+e.side:''} · repos ${TYPES[cur.type].rest} s</div>
-  ${last?`<div class="last">Dernière fois : ${last.sets.map(v=>v==null?'·':v).join(' · ')}${last.level!==p.level?' (palier précédent)':''}</div>`:''}
+  ${last?`<div class="last">Dernière fois : ${setsTxt(last)}${last.level!==p.level?' (palier précédent)':''}</div>`:''}
   ${showHow?`<div class="how">${esc(e.how)}<br><br><b>Pourquoi :</b> ${esc(e.why)}${e.page?'<br><span style="color:var(--text3)">Livre Lafay, '+e.page+'</span>':''}<br><br><b>Progression :</b> quand toutes les séries atteignent ${e.max} ${u}, tu passes au palier suivant${p.level<e.levels.length-1?' : '+esc(e.levels[p.level+1]):''}.</div>`:''}
-  <div class="chips">${chips}</div>${stepper}</div>`;
+  ${chips}${stepper}</div>`;
 }
 function tapSet(id,i){
   const p=data.presc[id];
-  if(!cur.ex[id])cur.ex[id]=Array(setsFor(id)).fill(null);
+  if(!cur.ex[id])cur.ex[id]=Array(slots(id)).fill(null);
   const arr=cur.ex[id];
   if(arr[i]==null){
     arr[i]=p.target;editing=null;persist();renderSession();
-    const n=setsFor(id),isLastSet=arr.filter(v=>v!=null).length>=n;
-    restStart(TYPES[cur.type].rest,isLastSet?'Exercice terminé · repos':'Repos · série '+(i+2)+' ensuite');
+    const n=setsFor(id),N=slots(id),isLastSet=arr.slice(0,N).filter(v=>v!=null).length>=N,rest=TYPES[cur.type].rest;
+    if(isLastSet)restStart(rest,'Exercice terminé · repos');
+    else if(UNI.has(id)){
+      const k=Math.floor(i/n),sideDone=arr.slice(k*n,k*n+n).every(v=>v!=null),sn=sideNames(id);
+      if(sideDone)restStart(SWITCH_REST,'Change de côté · '+sn[1-k].toLowerCase());
+      else restStart(rest,'Repos · '+sn[k].toLowerCase()+', série '+(i%n+2)+' ensuite');
+    }
+    else restStart(rest,'Repos · série '+(i+2)+' ensuite');
   } else {
     editing=(editing&&editing.id===id&&editing.i===i)?null:{id,i};renderSession();
   }
@@ -992,6 +1010,18 @@ function ropeHTML(){
 }
 function startRope(){const rp=ropePlan(progWeek(parseK(cur.date)),cur.light);startTimer(rp.segs,'var(--c-corde)',sec=>{cur.workSec=(cur.workSec||0)+sec;persist();renderSession();})}
 function startWarmup(){startTimer(warmupSegs(progWeek(parseK(cur.date)),cur.light),'var(--c-corde)',sec=>{cur.warmDone=true;cur.workSec=(cur.workSec||0)+sec;persist();renderSession();})}
+
+// ----- FIN DE SÉANCE · VENTRE -----
+// Stomach vacuum : le transverse, le muscle profond qui gaine le ventre. 9 × (20 s rentré + 15 s de respiration) = 5 min.
+function vacuumSegs(){
+  const segs=[{kind:'prep',label:'Installe-toi',sec:10,cue:'À quatre pattes ou sur le dos, genoux pliés'}];
+  for(let i=0;i<9;i++){
+    segs.push({kind:'work',label:'Vacuum · '+(i+1)+'/9',sec:20,cue:'Expire tout, rentre le nombril vers la colonne, tiens en respirant tout doucement'});
+    if(i<8)segs.push({kind:'rest',label:'Respire',sec:15,cue:'Relâche, grande inspiration par le ventre'});
+  }
+  return segs;
+}
+function startVacuum(){startTimer(vacuumSegs(),'var(--c-mob)',()=>{cur.vacDone=true;persist();renderSession();})}
 
 // ----- MOBILITÉ -----
 function mobSegs(key,len){
@@ -1100,13 +1130,14 @@ function finishSession(){
   if((t.kind==='rope'||t.kind==='mob')&&!cur.workSec&&!confirm('Le minuteur n\'a pas été utilisé. Enregistrer quand même ?'))return;
   restStop();
   const wins=[];
-  const s={id:'s'+Date.now(),type:cur.type,date:cur.date,ts:Date.now(),energy:cur.energy,light:cur.light,rpe:cur.rpe,note:cur.note||'',week:progWeek(parseK(cur.date))};
+  const s={id:'s'+Date.now(),vac:!!cur.vacDone,type:cur.type,date:cur.date,ts:Date.now(),energy:cur.energy,light:cur.light,rpe:cur.rpe,note:cur.note||'',week:progWeek(parseK(cur.date))};
   if(t.kind==='strength'){
     s.exercises=[];const ups=[];
     SESSIONS[cur.type].forEach(id=>{
       const arr=cur.ex[id];if(!arr||!arr.some(v=>v!=null))return;
       const p=data.presc[id],e=EX[id];
-      const log={id,level:p.level,target:p.target,sets:arr.slice(0,setsFor(id))};
+      const n0=setsFor(id),log={id,level:p.level,target:p.target,sets:UNI.has(id)?mergeSides(arr,n0):arr.slice(0,n0)};
+      if(UNI.has(id))log.sides=[arr.slice(0,n0).map(v=>v??null),arr.slice(n0,2*n0).map(v=>v??null)];
       // Record : meilleur total au même palier, ou palier jamais atteint
       const prev=data.sessions.flatMap(x=>x.exercises||[]).filter(x=>x.id===id);
       if(prev.length){
@@ -1116,7 +1147,7 @@ function finishSession(){
       }
       s.exercises.push(log);
       // Double progression
-      const n=setsFor(id),full=arr.slice(0,n).every(v=>v!=null&&v>=p.target);
+      const full=Array.from({length:slots(id)},(_,i)=>arr[i]).every(v=>v!=null&&v>=p.target);
       if(full&&!cur.light){
         if(p.target<e.max){p.target=Math.min(e.max,p.target+exStep(id));ups.push(exShort(id)+' <b>'+p.target+(exUnit(id)==='s'?' s':'')+'</b>');}
         else if(p.level<e.levels.length-1){p.level++;p.target=e.min;wins.push(['⭐','<b>Palier franchi !</b> '+esc(e.name)+' → '+esc(e.levels[p.level])]);}
@@ -1160,7 +1191,7 @@ function celebrate(s,wins){
 function showDone(id){
   const s=data.sessions.find(x=>x.id===id);if(!s)return;const t=TYPES[s.type];
   let body='';
-  if(s.exercises)body=s.exercises.map(e=>`<div class="win"><span style="flex:1"><b>${esc(EX[e.id].name)}</b><br><span class="note">${esc(EX[e.id].levels[e.level])}</span></span><span style="font-weight:800">${e.sets.map(v=>v==null?'·':v).join(' · ')}</span></div>`).join('');
+  if(s.exercises)body=s.exercises.map(e=>`<div class="win"><span style="flex:1"><b>${esc(EX[e.id].name)}</b><br><span class="note">${esc(EX[e.id].levels[e.level])}</span></span><span style="font-weight:800">${setsTxt(e)}</span></div>`).join('');
   if(s.rec&&Object.keys(s.rec).length)body+=`<div class="win">🏆 ${s.rec.cont!=null?s.rec.cont+' s sans arrêt ':''}${s.rec.cross!=null?'· '+s.rec.cross+' croisés ':''}${s.rec.du!=null?'· '+s.rec.du+' doubles':''}</div>`;
   if(s.spot)body+=`<div class="win">📍 ${esc(s.spot)}${s.fun?' · '+'★'.repeat(s.fun):''}</div>`;
   if(s.note)body+=`<div class="win">✎ ${esc(s.note)}</div>`;
